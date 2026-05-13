@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/CoreFlow.Api/">
+    <Project Path="CoreFlow.Api/CoreFlow.API.csproj" />
+  </Folder>
+  <Project Path="CoreFlow.Application/CoreFlow.Application.csproj" />
+  <Project Path="CoreFlow.Domain/CoreFlow.Domain.csproj" />
+  <Project Path="CoreFlow.Infrastructure/CoreFlow.Infrastructure.csproj" />
+  <Project Path="CoreFlow.Tests/CoreFlow.Tests.csproj" />
+</Solution>

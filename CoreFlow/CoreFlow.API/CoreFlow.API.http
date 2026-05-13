@@ -1,0 +1,6 @@
+@CoreFlow.Api_HostAddress = http://localhost:5062
+
+GET {{CoreFlow.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
