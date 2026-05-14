@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coreflow_api
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__Default: "Server=db,1433;Database=CoreFlowDb;User Id=sa;Password=Str0ngP@ssw0rd!;TrustServerCertificate=True;"
+    ports:
+      - "5088:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: coreflow_sql

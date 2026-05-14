@@ -1,0 +1,6 @@
+**/.vs
+**/bin
+**/obj
+**/.git
+api-test.*.log
+README.md
