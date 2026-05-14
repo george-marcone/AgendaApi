@@ -11,10 +11,9 @@ public class UpdateUserHandler : IRequestHandler<UpdateUserCommand>
 
     public UpdateUserHandler(IUserService service) => _service = service;
 
-    public async Task<Unit> Handle(UpdateUserCommand request, CancellationToken cancellationToken)
+    public async Task Handle(UpdateUserCommand request, CancellationToken cancellationToken)
     {
         var user = new User { Id = request.Id, Name = request.Name, Email = request.Email, Phone = request.Phone };
         await _service.UpdateAsync(user);
-        return Unit.Value;
     }
 }

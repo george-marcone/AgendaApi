@@ -12,7 +12,7 @@ namespace CoreFlow.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.0")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             modelBuilder.Entity("CoreFlow.Domain.Entities.User", b =>

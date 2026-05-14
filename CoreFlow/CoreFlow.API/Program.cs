@@ -27,9 +27,8 @@ else
     builder.Services.AddSingleton<IUserService, InMemoryUserService>();
 }
 // mediatR + validators + pipeline
-builder.Services.AddMediatR(typeof(CreateUserCommand).Assembly);
-// register validator explicitly to avoid extension method ambiguity in this small sample
-builder.Services.AddTransient<IValidator<CreateUserCommand>, CreateUserCommandValidator>();
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateUserCommand).Assembly));
+builder.Services.AddValidatorsFromAssemblyContaining<CreateUserCommandValidator>();
 builder.Services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(CoreFlow.Application.Behaviors.ValidationBehavior<,>));
 
 var app = builder.Build();
