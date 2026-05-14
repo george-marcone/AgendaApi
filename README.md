@@ -1,3 +1,5 @@
+Backend do projeto agenda de contatos em .NET 10 + CQRS + Migrations + Ef Core + Fluent Validations
+
 CoreFlow — Resumo do trabalho
 Este repositório contém a solução CoreFlow usada pelo AgendaApi. Abaixo estão os projetos presentes, artefatos importantes e comandos específicos para build, execução e testes.
 
