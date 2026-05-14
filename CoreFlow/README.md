@@ -1,79 +1,285 @@
-# CoreFlow — Resumo do trabalho
+# CoreFlow
 
-Este repositório contém a solução CoreFlow usada pelo AgendaApi. Abaixo estão os projetos presentes, artefatos importantes e comandos específicos para build, execução e testes.
+Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, FluentValidation, EF Core e SQL Server em Docker.
 
-## Projetos
+## Estrutura do Projeto
 
-- CoreFlow.Domain
-- CoreFlow.Application
-- CoreFlow.Infrastructure
-- CoreFlow.Api
-- CoreFlow.Tests
-
-## Artefatos principais
-
-- Domain: CoreFlow.Domain/Entities/User.cs
-- API: CoreFlow.Api/Controllers/UserController.cs, CoreFlow.Api/Program.cs
-- Tests: CoreFlow.Tests (xUnit)
+- `CoreFlow.API`: Web API ASP.NET Core, controllers e configuracao de DI.
+- `CoreFlow.Application`: commands, queries, handlers, validators, interfaces e behaviors.
+- `CoreFlow.Domain`: entidades de dominio.
+- `CoreFlow.Infrastructure`: EF Core, `AppDbContext`, servicos de persistencia e migrations.
+- `CoreFlow.Tests`: testes automatizados com xUnit.
+- `docker/sql/init.sql`: script para criar o banco, tabela e seed inicial.
+- `Dockerfile`: build da imagem do backend.
+- `docker-compose.yml`: orquestra backend, SQL Server e inicializacao do banco.
 
 ## Requisitos
 
-- .NET 10 SDK instalado (verifique com `dotnet --version`)
-- Visual Studio 2026 ou dotnet CLI
+- .NET SDK 10
+- Docker Desktop
+- SQL Server client opcional: SSMS, Azure Data Studio ou `sqlcmd`
 
-## Comandos específicos
+## Banco de Dados
 
-Execute a partir da raiz do repositório (ex: C:\George Marcone\GitHub\Blue-dev\AgendaApi\CoreFlow):
+O banco usado pela aplicacao e:
 
-- Restaurar pacotes
+```text
+CoreFlowDb
+```
 
-  dotnet restore
+A tabela usada pelo CRUD e:
 
-- Compilar a solução
+```text
+dbo.Users
+```
 
-  dotnet build --no-restore
+Colunas:
 
-- Executar a Web API (projeto CoreFlow.Api)
+```sql
+Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+Name NVARCHAR(200) NOT NULL
+Email NVARCHAR(200) NOT NULL
+Phone NVARCHAR(50) NOT NULL
+```
 
-  dotnet run --project CoreFlow.Api\CoreFlow.Api.csproj
+Credenciais do SQL Server no Docker:
 
-- Executar os testes do projeto de testes
+```text
+Server: localhost,1433
+Database: CoreFlowDb
+User: sa
+Password: Str0ngP@ssw0rd!
+TrustServerCertificate: True
+```
 
-  dotnet test CoreFlow.Tests\CoreFlow.Tests.csproj
+Para consultar os registros:
 
-- Listar projetos na solution
+```sql
+USE CoreFlowDb;
 
-  dotnet sln CoreFlow.slnx list
+SELECT COUNT(*) AS TotalUsers
+FROM dbo.Users;
 
-OBS: se a solução estiver nomeada como CoreFlow.sln em vez de CoreFlow.slnx, ajuste o comando acima.
+SELECT TOP 10 *
+FROM dbo.Users;
+```
 
-## Comandos úteis
+## Docker
 
-- Ver versão do .NET
+### Subir API e banco
 
-  dotnet --version
+Na raiz do projeto:
 
-- Formatar código
+```powershell
+docker compose up -d --build
+```
 
-  dotnet format
+Servicos:
 
-## Docker (exemplo genérico)
+- `coreflow_api`: backend ASP.NET Core.
+- `coreflow_sql`: SQL Server 2022.
+- `db-init`: executa `docker/sql/init.sql` para criar/popular o banco.
 
-- Build da imagem
+Portas:
 
-  docker build -t coreflow:latest .
+```text
+API: http://localhost:5088
+SQL Server: localhost,1433
+```
 
-- Executar a imagem
+### Testar a API em container
 
-  docker run --rm -p 5000:80 coreflow:latest
+```powershell
+Invoke-RestMethod http://localhost:5088/api/User
+```
 
-Substitua porta e Dockerfile conforme necessário para seu projeto.
+Criar usuario:
 
-## Próximos passos sugeridos
+```powershell
+$body = @{
+  name = "George Santos"
+  email = "gmarcones@email.com"
+  phone = "+55 81 997442241"
+} | ConvertTo-Json
 
-1. Adicionar um arquivo `.gitignore` (VisualStudio) e remover `bin/`, `obj/` e `.vs/` do repositório.
-2. Extrair repositório (IUserRepository) e integrar EF Core para persistência se necessário.
-3. Adicionar pipelines CI para build e testes automáticos.
+Invoke-WebRequest `
+  -Uri "http://localhost:5088/api/User" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
 
----
-Arquivo atualizado para incluir comandos específicos para CoreFlow.Api e CoreFlow.Tests.
+### Comandos Docker uteis
+
+```powershell
+docker ps
+docker logs coreflow_api
+docker logs coreflow_sql
+docker compose down
+```
+
+## Execucao Local
+
+Para rodar a API fora do Docker:
+
+```powershell
+dotnet run --project CoreFlow.API/CoreFlow.API.csproj
+```
+
+O `appsettings.json` esta configurado para acessar o SQL Server exposto pelo container:
+
+```text
+Server=localhost,1433;Database=CoreFlowDb;User Id=sa;Password=Str0ngP@ssw0rd!;TrustServerCertificate=True;
+```
+
+## Endpoints do CRUD
+
+Base URL local:
+
+```text
+http://localhost:5088
+```
+
+Rotas:
+
+```text
+GET    /api/User
+GET    /api/User/{id}
+POST   /api/User
+PUT    /api/User/{id}
+DELETE /api/User/{id}
+```
+
+Payload de criacao:
+
+```json
+{
+  "name": "George Marcone",
+  "email": "gmarcone@gmail.com",
+  "phone": "+55 81 997233344"
+}
+```
+
+Payload de atualizacao:
+
+```json
+{
+  "id": "GUID_DO_USUARIO",
+  "name": "George Marcone",
+  "email": "gmarcone@gmail.com",
+  "phone": "+55 81 997233344"
+}
+```
+
+## EF Core
+
+Versao em uso:
+
+```text
+Microsoft.EntityFrameworkCore 10.0.8
+Microsoft.EntityFrameworkCore.SqlServer 10.0.8
+Microsoft.EntityFrameworkCore.Design 10.0.8
+Microsoft.EntityFrameworkCore.Tools 10.0.8
+```
+
+Arquivos principais:
+
+- `CoreFlow.Infrastructure/Data/AppDbContext.cs`
+- `CoreFlow.Infrastructure/Migrations/20260514_InitialCreate.cs`
+- `CoreFlow.Infrastructure/Migrations/CoreFlow.InfrastructureModelSnapshot.cs`
+
+Listar migrations:
+
+```powershell
+dotnet ef migrations list `
+  --project CoreFlow.Infrastructure/CoreFlow.Infrastructure.csproj `
+  --startup-project CoreFlow.API/CoreFlow.API.csproj
+```
+
+Aplicar migrations:
+
+```powershell
+dotnet ef database update `
+  --project CoreFlow.Infrastructure/CoreFlow.Infrastructure.csproj `
+  --startup-project CoreFlow.API/CoreFlow.API.csproj
+```
+
+Observacao: o `docker/sql/init.sql` tambem cria a tabela `dbo.Users` e popula 50 registros. Em ambiente controlado, escolha um fluxo principal para criar o banco: migrations do EF Core ou script SQL de inicializacao.
+
+## CQRS
+
+O projeto usa CQRS com MediatR.
+
+Commands:
+
+- `CreateUserCommand`
+- `UpdateUserCommand`
+- `DeleteUserCommand`
+
+Queries:
+
+- `GetAllUsersQuery`
+- `GetUserByIdQuery`
+
+Handlers:
+
+- `CreateUserHandler`
+- `UpdateUserHandler`
+- `DeleteUserHandler`
+- `GetAllUsersHandler`
+- `GetUserByIdHandler`
+
+Validacao:
+
+- `CreateUserCommandValidator`
+- `UpdateUserCommandValidator`
+- `ValidationBehavior<TRequest, TResponse>`
+
+O `Program.cs` registra MediatR, FluentValidation, pipeline behavior, controllers e infraestrutura. Ele e necessario como composition root da API, mas a regra de CQRS fica na camada `CoreFlow.Application`.
+
+## Testes Unitarios
+
+Frameworks/pacotes:
+
+```text
+xUnit 2.9.3
+xunit.runner.visualstudio 3.1.5
+Microsoft.NET.Test.Sdk 18.5.1
+coverlet.collector 10.0.0
+```
+
+Executar testes:
+
+```powershell
+dotnet test
+```
+
+Teste atual:
+
+- `CoreFlow.Tests/UserTests.cs`: valida valores padrao da entidade `User`.
+
+## Build
+
+Restaurar pacotes:
+
+```powershell
+dotnet restore
+```
+
+Compilar:
+
+```powershell
+dotnet build
+```
+
+Checar pacotes vulneraveis:
+
+```powershell
+dotnet list package --vulnerable --include-transitive
+```
+
+Checar pacotes desatualizados:
+
+```powershell
+dotnet list package --outdated
+```
