@@ -4,6 +4,8 @@ using CoreFlow.Application.Commands;
 using CoreFlow.Application.Validators;
 using CoreFlow.Application.Interfaces;
 using CoreFlow.Infrastructure.Services;
+using CoreFlow.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +14,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // register DI
-builder.Services.AddSingleton<IUserService, InMemoryUserService>();
+var conn = builder.Configuration.GetConnectionString("Default");
+if (!string.IsNullOrWhiteSpace(conn))
+{
+    // usa EF Core com a connection string definida (ex: SQLite)
+    builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(conn));
+    builder.Services.AddScoped<IUserService, EfUserService>();
+}
+else
+{
+    // fallback in-memory
+    builder.Services.AddSingleton<IUserService, InMemoryUserService>();
+}
 // mediatR + validators + pipeline
 builder.Services.AddMediatR(typeof(CreateUserCommand).Assembly);
 // register validator explicitly to avoid extension method ambiguity in this small sample
