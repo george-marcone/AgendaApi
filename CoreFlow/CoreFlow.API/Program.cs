@@ -17,8 +17,8 @@ builder.Services.AddOpenApi();
 var conn = builder.Configuration.GetConnectionString("Default");
 if (!string.IsNullOrWhiteSpace(conn))
 {
-    // usa EF Core com a connection string definida (ex: SQLite)
-    builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(conn));
+    // usa EF Core com a connection string definida (SQL Server)
+    builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(conn));
     builder.Services.AddScoped<IUserService, EfUserService>();
 }
 else

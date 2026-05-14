@@ -13,7 +13,7 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, Guid>
 
     public async Task<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        var p = new User { Name = request.Name };
+        var p = new User { Name = request.Name, Email = request.Email, Phone = request.Phone };
         await _service.AddAsync(p);
         return p.Id;
     }

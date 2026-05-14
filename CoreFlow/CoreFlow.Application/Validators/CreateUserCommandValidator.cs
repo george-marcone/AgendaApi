@@ -8,8 +8,8 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
     public CreateUserCommandValidator()
     {
         RuleFor(x => x.Name).NotEmpty().WithMessage("Name is required");
-        RuleFor(x => x.Email).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email));
-        RuleFor(x => x.Phone).Matches("^\\+?[0-9\- ]{6,20}$").When(x => !string.IsNullOrWhiteSpace(x.Phone));
+        RuleFor(x => x.Email).NotEmpty().WithMessage("Email is required").EmailAddress().WithMessage("Email is invalid");
+        RuleFor(x => x.Phone).NotEmpty().WithMessage("Phone is required").Matches("^\\+?[0-9\\- ]{6,20}$").WithMessage("Phone is invalid");
     }
 }
 

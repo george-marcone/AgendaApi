@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: coreflow_sql
+    environment:
+      SA_PASSWORD: "Str0ngP@ssw0rd!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./docker/sql:/scripts
+    healthcheck:
+      test: ["CMD-SHELL","/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      retries: 10
+
+  db-init:
+    image: mcr.microsoft.com/mssql-tools
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./docker/sql:/scripts
+    entrypoint: ["/bin/bash","-c","/opt/mssql-tools/bin/sqlcmd -S db -U sa -P $SA_PASSWORD -i /scripts/init.sql"]
+    environment:
+      SA_PASSWORD: "Str0ngP@ssw0rd!"
+    restart: "no"
