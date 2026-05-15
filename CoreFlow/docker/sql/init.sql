@@ -33,7 +33,7 @@ DECLARE @i INT = 1;
 WHILE @i <= 50
 BEGIN
 	INSERT INTO dbo.Users (Id, Name, Email, Phone)
-	VALUES (NEWID(), CONCAT('User ', @i), CONCAT('user', @i, '@example.com'), CONCAT('+55 11 9', RIGHT('000000' + CAST((100000 + @i) AS VARCHAR(6)),6)));
+	VALUES (NEWID(), CONCAT('User ', @i), CONCAT('user', @i, '@example.com'), CONCAT('+55119', RIGHT('00000000' + CAST(@i AS VARCHAR(8)), 8)));
 	SET @i = @i + 1;
 END;
 GO

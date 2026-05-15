@@ -111,7 +111,7 @@ Criar usuario:
 $body = @{
   name = "George Santos"
   email = "gmarcones@email.com"
-  phone = "+55 81 997442241"
+  phone = "+5581997442241"
 } | ConvertTo-Json
 
 Invoke-WebRequest `
@@ -168,7 +168,7 @@ Payload de criacao:
 {
   "name": "George Marcone",
   "email": "gmarcone@gmail.com",
-  "phone": "+55 81 997233344"
+  "phone": "+5581997233344"
 }
 ```
 
@@ -179,7 +179,7 @@ Payload de atualizacao:
   "id": "GUID_DO_USUARIO",
   "name": "George Marcone",
   "email": "gmarcone@gmail.com",
-  "phone": "+55 81 997233344"
+  "phone": "+5581997233344"
 }
 ```
 

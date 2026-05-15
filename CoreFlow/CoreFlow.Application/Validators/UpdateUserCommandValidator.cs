@@ -18,7 +18,7 @@ public class UpdateUserCommandValidator : AbstractValidator<UpdateUserCommand>
 
         RuleFor(x => x.Phone)
             .NotEmpty().WithMessage("Phone is required")
-            .Matches("^\\+?[0-9\\- ]{6,20}$").WithMessage("Phone is invalid")
+            .Matches("^\\+[0-9]{13}$").WithMessage("Phone is invalid")
             .MustAsync(async (command, phone, cancellationToken) => !await userService.PhoneExistsAsync(phone, command.Id, cancellationToken))
             .WithMessage("Phone already exists");
     }
