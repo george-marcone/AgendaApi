@@ -65,6 +65,17 @@ public class InMemoryUserService : IUserService
         return Task.CompletedTask;
     }
 
+    public Task UpdatePasswordHashAsync(Guid id, string passwordHash)
+    {
+        var idx = _items.FindIndex(x => x.Id == id);
+        if (idx >= 0)
+        {
+            _items[idx] = _items[idx] with { PasswordHash = passwordHash };
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(Guid id)
     {
         _items.RemoveAll(x => x.Id == id);

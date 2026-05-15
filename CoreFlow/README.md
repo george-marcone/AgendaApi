@@ -224,6 +224,7 @@ GET    /api/User
 GET    /api/User/{id}
 POST   /api/User
 PUT    /api/User/{id}
+PATCH  /api/User/me/password
 DELETE /api/User/{id}
 ```
 
@@ -246,6 +247,15 @@ Payload de atualizacao:
   "name": "George Marcone",
   "email": "gmarcone@gmail.com",
   "phone": "+5581997233344"
+}
+```
+
+Payload para troca da propria senha:
+
+```json
+{
+  "currentPassword": "Admin@123456",
+  "newPassword": "User@123456"
 }
 ```
 

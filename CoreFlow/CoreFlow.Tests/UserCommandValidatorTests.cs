@@ -58,6 +58,24 @@ public class UserCommandValidatorTests
         Assert.True(result.IsValid);
     }
 
+    [Theory]
+    [InlineData("", "User@123456", "CurrentPassword")]
+    [InlineData("Admin@123456", "", "NewPassword")]
+    [InlineData("Admin@123456", "1234567", "NewPassword")]
+    public async Task ChangeOwnPasswordCommandValidator_RejectsInvalidPasswords(
+        string currentPassword,
+        string newPassword,
+        string expectedPropertyName)
+    {
+        var validator = new ChangeOwnPasswordCommandValidator();
+        var command = new ChangeOwnPasswordCommand(Guid.NewGuid(), currentPassword, newPassword);
+
+        var result = await validator.ValidateAsync(command);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == expectedPropertyName);
+    }
+
     private sealed class EmptyUserService : IUserService
     {
         public Task<User[]> GetAllAsync() => Task.FromResult(Array.Empty<User>());
@@ -73,6 +91,8 @@ public class UserCommandValidatorTests
         public Task AddAsync(User user) => Task.CompletedTask;
 
         public Task UpdateAsync(User user) => Task.CompletedTask;
+
+        public Task UpdatePasswordHashAsync(Guid id, string passwordHash) => Task.CompletedTask;
 
         public Task DeleteAsync(Guid id) => Task.CompletedTask;
     }

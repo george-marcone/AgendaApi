@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using CoreFlow.Application.Commands;
 using CoreFlow.Application.Queries;
 using CoreFlow.Domain.Entities;
@@ -94,6 +95,46 @@ public class UserController : ControllerBase
     }
 
     /// <summary>
+    /// Changes the authenticated user's password.
+    /// </summary>
+    /// <param name="request">Current and new password.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    [HttpPatch("me/password")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangeOwnPassword(
+        ChangeOwnPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            _logger.LogWarning("Password change rejected because the authenticated user id claim was invalid.");
+            return Unauthorized();
+        }
+
+        var result = await _mediator.Send(
+            new ChangeOwnPasswordCommand(userId, request.CurrentPassword, request.NewPassword),
+            cancellationToken);
+
+        if (result == ChangeOwnPasswordResult.UserNotFound)
+        {
+            _logger.LogWarning("Password change rejected because user {UserId} was not found.", userId);
+            return Unauthorized();
+        }
+
+        if (result == ChangeOwnPasswordResult.InvalidCurrentPassword)
+        {
+            _logger.LogWarning("Password change rejected because current password was invalid for user {UserId}.", userId);
+            return BadRequest(new { message = "Current password is invalid." });
+        }
+
+        _logger.LogInformation("User {UserId} changed their own password.", userId);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Deletes a user.
     /// </summary>
     /// <param name="id">User identifier.</param>
@@ -108,3 +149,5 @@ public class UserController : ControllerBase
         return NoContent();
     }
 }
+
+public record ChangeOwnPasswordRequest(string CurrentPassword, string NewPassword);

@@ -62,6 +62,15 @@ public class EfUserService : IUserService
         await _db.SaveChangesAsync();
     }
 
+    public async Task UpdatePasswordHashAsync(Guid id, string passwordHash)
+    {
+        var existing = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+        if (existing is null) return;
+
+        _db.Users.Update(existing with { PasswordHash = passwordHash });
+        await _db.SaveChangesAsync();
+    }
+
     public async Task DeleteAsync(Guid id)
     {
         var entity = await _db.Users.FindAsync(id);

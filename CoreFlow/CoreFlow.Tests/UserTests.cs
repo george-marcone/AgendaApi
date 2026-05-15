@@ -1,4 +1,7 @@
+using CoreFlow.Application.Commands;
+using CoreFlow.Application.Handlers;
 using CoreFlow.Domain.Entities;
+using CoreFlow.Infrastructure.Security;
 using CoreFlow.Infrastructure.Services;
 using Xunit;
 
@@ -73,5 +76,66 @@ public class UserTests
         Assert.NotNull(user);
         Assert.Equal("Updated", user.Name);
         Assert.Equal(createdAt, user.CreatedAt);
+    }
+
+    [Fact]
+    public async Task ChangeOwnPasswordHandler_UpdatesOnlyAuthenticatedUserPassword()
+    {
+        var service = new InMemoryUserService();
+        var passwordHasher = new PasswordHasher();
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var createdAt = new DateTimeOffset(2026, 5, 14, 10, 0, 0, TimeSpan.Zero);
+
+        await service.AddAsync(new User
+        {
+            Id = id,
+            Name = "Original",
+            Email = "original@example.com",
+            Phone = "+5511900000001",
+            PasswordHash = passwordHasher.Hash("Admin@123456"),
+            CreatedAt = createdAt
+        });
+
+        var handler = new ChangeOwnPasswordHandler(service, passwordHasher);
+        var result = await handler.Handle(
+            new ChangeOwnPasswordCommand(id, "Admin@123456", "User@123456"),
+            CancellationToken.None);
+
+        var user = await service.GetByIdAsync(id);
+
+        Assert.Equal(ChangeOwnPasswordResult.Updated, result);
+        Assert.NotNull(user);
+        Assert.Equal("Original", user.Name);
+        Assert.Equal(createdAt, user.CreatedAt);
+        Assert.True(passwordHasher.Verify("User@123456", user.PasswordHash));
+        Assert.False(passwordHasher.Verify("Admin@123456", user.PasswordHash));
+    }
+
+    [Fact]
+    public async Task ChangeOwnPasswordHandler_RejectsInvalidCurrentPassword()
+    {
+        var service = new InMemoryUserService();
+        var passwordHasher = new PasswordHasher();
+        var id = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+        await service.AddAsync(new User
+        {
+            Id = id,
+            Name = "Original",
+            Email = "original@example.com",
+            Phone = "+5511900000001",
+            PasswordHash = passwordHasher.Hash("Admin@123456")
+        });
+
+        var handler = new ChangeOwnPasswordHandler(service, passwordHasher);
+        var result = await handler.Handle(
+            new ChangeOwnPasswordCommand(id, "wrong-password", "User@123456"),
+            CancellationToken.None);
+
+        var user = await service.GetByIdAsync(id);
+
+        Assert.Equal(ChangeOwnPasswordResult.InvalidCurrentPassword, result);
+        Assert.NotNull(user);
+        Assert.True(passwordHasher.Verify("Admin@123456", user.PasswordHash));
     }
 }
