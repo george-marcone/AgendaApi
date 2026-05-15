@@ -27,31 +27,45 @@ O banco usado pela aplicacao e:
 CoreFlowDb
 ```
 
-A tabela usada pelo CRUD e:
+As tabelas principais sao:
 
 ```text
 dbo.Users
+dbo.AuthUsers
 ```
 
-Colunas:
+Colunas de `dbo.Users`:
 
 ```sql
 Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
 Name NVARCHAR(200) NOT NULL
 Email NVARCHAR(200) NOT NULL
 Phone NVARCHAR(50) NOT NULL
+CreatedAt DATETIMEOFFSET NOT NULL
+```
+
+Colunas de `dbo.AuthUsers`:
+
+```sql
+Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+Name NVARCHAR(200) NOT NULL
+Email NVARCHAR(200) NOT NULL
+PasswordHash NVARCHAR(500) NOT NULL
+CreatedAt DATETIMEOFFSET NOT NULL
 ```
 
 Regras de unicidade:
 
-- `Email` nao pode ser repetido.
-- `Phone` nao pode ser repetido.
+- `Users.Email` nao pode ser repetido.
+- `Users.Phone` nao pode ser repetido.
+- `AuthUsers.Email` nao pode ser repetido.
 
-Essas regras sao validadas na camada de aplicacao com FluentValidation e tambem protegidas no banco com indices unicos:
+As regras do CRUD sao validadas na camada de aplicacao com FluentValidation. As regras de unicidade tambem sao protegidas no banco com indices unicos:
 
 ```text
 IX_Users_Email
 IX_Users_Phone
+IX_AuthUsers_Email
 ```
 
 Credenciais do SQL Server no Docker:
@@ -64,6 +78,13 @@ Password: Str0ngP@ssw0rd!
 TrustServerCertificate: True
 ```
 
+Usuario inicial de autenticacao para desenvolvimento:
+
+```text
+Email: admin@coreflow.local
+Senha: Admin@123456
+```
+
 Para consultar os registros:
 
 ```sql
@@ -74,6 +95,40 @@ FROM dbo.Users;
 
 SELECT TOP 10 *
 FROM dbo.Users;
+```
+
+## Autenticacao JWT
+
+A API usa JWT Bearer. As configuracoes ficam em `Jwt` no `appsettings.json` e podem ser sobrescritas por variaveis de ambiente:
+
+```text
+Jwt__Issuer
+Jwt__Audience
+Jwt__Key
+Jwt__ExpiresMinutes
+```
+
+Login:
+
+```powershell
+$login = @{
+  email = "admin@coreflow.local"
+  password = "Admin@123456"
+} | ConvertTo-Json
+
+$auth = Invoke-RestMethod `
+  -Uri "http://localhost:5088/api/Auth/login" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $login
+```
+
+Validar token/autenticacao:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:5088/api/Auth/authenticate" `
+  -Headers @{ Authorization = "Bearer $($auth.accessToken)" }
 ```
 
 ## Docker
@@ -102,7 +157,20 @@ SQL Server: localhost,1433
 ### Testar a API em container
 
 ```powershell
-Invoke-RestMethod http://localhost:5088/api/User
+$login = @{
+  email = "admin@coreflow.local"
+  password = "Admin@123456"
+} | ConvertTo-Json
+
+$auth = Invoke-RestMethod `
+  -Uri "http://localhost:5088/api/Auth/login" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $login
+
+Invoke-RestMethod `
+  -Uri "http://localhost:5088/api/User" `
+  -Headers @{ Authorization = "Bearer $($auth.accessToken)" }
 ```
 
 Criar usuario:
@@ -118,6 +186,7 @@ Invoke-WebRequest `
   -Uri "http://localhost:5088/api/User" `
   -Method Post `
   -ContentType "application/json" `
+  -Headers @{ Authorization = "Bearer $($auth.accessToken)" } `
   -Body $body
 ```
 
@@ -152,7 +221,14 @@ Base URL local:
 http://localhost:5088
 ```
 
-Rotas:
+Rotas de autenticacao:
+
+```text
+POST   /api/Auth/login
+GET    /api/Auth/authenticate
+```
+
+Rotas do CRUD protegidas por JWT:
 
 ```text
 GET    /api/User
@@ -198,6 +274,8 @@ Arquivos principais:
 
 - `CoreFlow.Infrastructure/Data/AppDbContext.cs`
 - `CoreFlow.Infrastructure/Migrations/20260514_InitialCreate.cs`
+- `CoreFlow.Infrastructure/Migrations/20260515_AddUserCreatedAt.cs`
+- `CoreFlow.Infrastructure/Migrations/20260515_AddAuthUsers.cs`
 - `CoreFlow.Infrastructure/Migrations/CoreFlow.InfrastructureModelSnapshot.cs`
 
 Listar migrations:
@@ -216,7 +294,7 @@ dotnet ef database update `
   --startup-project CoreFlow.API/CoreFlow.API.csproj
 ```
 
-Observacao: o `docker/sql/init.sql` tambem cria a tabela `dbo.Users` e popula 50 registros. Em ambiente controlado, escolha um fluxo principal para criar o banco: migrations do EF Core ou script SQL de inicializacao.
+Observacao: o `docker/sql/init.sql` tambem cria `dbo.Users`, `dbo.AuthUsers`, popula 50 contatos e cria o usuario inicial de autenticacao. Em ambiente controlado, escolha um fluxo principal para criar o banco: migrations do EF Core ou script SQL de inicializacao.
 
 ## CQRS
 
@@ -268,9 +346,10 @@ Executar testes:
 dotnet test
 ```
 
-Teste atual:
+Testes atuais:
 
-- `CoreFlow.Tests/UserTests.cs`: valida valores padrao da entidade `User`.
+- `CoreFlow.Tests/UserTests.cs`: valida entidade, ordenacao por contato mais recente e preservacao de `CreatedAt`.
+- `CoreFlow.Tests/AuthTests.cs`: valida hash de senha e autenticacao em memoria.
 
 ## Build
 

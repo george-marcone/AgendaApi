@@ -2,11 +2,13 @@ using CoreFlow.Application.Commands;
 using CoreFlow.Application.Queries;
 using CoreFlow.Domain.Entities;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CoreFlow.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class UserController : ControllerBase
 {

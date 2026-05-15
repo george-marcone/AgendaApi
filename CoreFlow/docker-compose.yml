@@ -9,6 +9,10 @@ services:
     environment:
       ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__Default: "Server=db,1433;Database=CoreFlowDb;User Id=sa;Password=Str0ngP@ssw0rd!;TrustServerCertificate=True;"
+      Jwt__Issuer: "CoreFlow.Api"
+      Jwt__Audience: "CoreFlow.Frontend"
+      Jwt__Key: "CoreFlow.Dev.Jwt.Secret.Change.This.Value.2026"
+      Jwt__ExpiresMinutes: "60"
     ports:
       - "5088:8080"
     depends_on:

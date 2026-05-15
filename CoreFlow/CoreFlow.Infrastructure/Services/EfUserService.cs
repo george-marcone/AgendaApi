@@ -19,7 +19,11 @@ public class EfUserService : IUserService
 
     public async Task<User[]> GetAllAsync()
     {
-        return await _db.Users.AsNoTracking().ToArrayAsync();
+        return await _db.Users
+            .AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .ToArrayAsync();
     }
 
     public async Task<User?> GetByIdAsync(Guid id)
@@ -45,7 +49,16 @@ public class EfUserService : IUserService
 
     public async Task UpdateAsync(User user)
     {
-        _db.Users.Update(user);
+        var existing = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == user.Id);
+        if (existing is null) return;
+
+        _db.Users.Update(existing with
+        {
+            Name = user.Name,
+            Email = user.Email,
+            Phone = user.Phone
+        });
+
         await _db.SaveChangesAsync();
     }
 

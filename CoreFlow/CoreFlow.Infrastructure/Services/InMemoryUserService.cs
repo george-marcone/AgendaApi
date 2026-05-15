@@ -15,7 +15,12 @@ public class InMemoryUserService : IUserService
 
     public Task<User[]> GetAllAsync()
     {
-        return Task.FromResult(_items.ToArray());
+        var users = _items
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .ToArray();
+
+        return Task.FromResult(users);
     }
 
     public Task<User?> GetByIdAsync(Guid id)
@@ -47,7 +52,16 @@ public class InMemoryUserService : IUserService
     public Task UpdateAsync(User user)
     {
         var idx = _items.FindIndex(x => x.Id == user.Id);
-        if (idx >= 0) _items[idx] = user;
+        if (idx >= 0)
+        {
+            _items[idx] = _items[idx] with
+            {
+                Name = user.Name,
+                Email = user.Email,
+                Phone = user.Phone
+            };
+        }
+
         return Task.CompletedTask;
     }
 

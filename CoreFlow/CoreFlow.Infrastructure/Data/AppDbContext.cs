@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<AuthUser> AuthUsers { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -21,8 +22,20 @@ public class AppDbContext : DbContext
             b.Property(u => u.Name).IsRequired().HasMaxLength(200);
             b.Property(u => u.Email).IsRequired().HasMaxLength(200);
             b.Property(u => u.Phone).IsRequired().HasMaxLength(50);
+            b.Property(u => u.CreatedAt).IsRequired().HasColumnType("datetimeoffset");
             b.HasIndex(u => u.Email).IsUnique();
             b.HasIndex(u => u.Phone).IsUnique();
+            b.HasIndex(u => u.CreatedAt);
+        });
+
+        modelBuilder.Entity<AuthUser>(b =>
+        {
+            b.HasKey(u => u.Id);
+            b.Property(u => u.Name).IsRequired().HasMaxLength(200);
+            b.Property(u => u.Email).IsRequired().HasMaxLength(200);
+            b.Property(u => u.PasswordHash).IsRequired().HasMaxLength(500);
+            b.Property(u => u.CreatedAt).IsRequired().HasColumnType("datetimeoffset");
+            b.HasIndex(u => u.Email).IsUnique();
         });
     }
 }
