@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug CoreFlow.API",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build CoreFlow.API",
+      "program": "${workspaceFolder}/CoreFlow/CoreFlow.API/bin/Debug/net10.0/CoreFlow.API.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/CoreFlow/CoreFlow.API",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5062"
+      },
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(http://\\S+)"
+      }
+    }
+  ]
+}

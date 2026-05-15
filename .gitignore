@@ -11,3 +11,4 @@ obj/
 
 # Logs/cache
 *.log
+*.lscache
