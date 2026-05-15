@@ -15,6 +15,8 @@ services:
       Jwt__ExpiresMinutes: "60"
     ports:
       - "5088:8080"
+    volumes:
+      - ./CoreFlow.API/logs:/app/logs
     depends_on:
       db:
         condition: service_healthy

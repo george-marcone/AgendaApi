@@ -13,42 +13,98 @@ namespace CoreFlow.Api.Controllers;
 public class UserController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ILogger<UserController> _logger;
 
-    public UserController(IMediator mediator) => _mediator = mediator;
-
-    [HttpGet]
-    public async Task<IEnumerable<User>> Get()
+    public UserController(IMediator mediator, ILogger<UserController> logger)
     {
-        return await _mediator.Send(new GetAllUsersQuery());
+        _mediator = mediator;
+        _logger = logger;
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<User>> Get(Guid id)
+    /// <summary>
+    /// Lists all registered users.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(IEnumerable<User>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<IEnumerable<User>>> GetAll(CancellationToken cancellationToken)
     {
-        var user = await _mediator.Send(new GetUserByIdQuery(id));
-        if (user is null) return NotFound();
+        var users = await _mediator.Send(new GetAllUsersQuery(), cancellationToken);
+        _logger.LogInformation("Listed {UserCount} users.", users.Length);
+        return Ok(users);
+    }
+
+    /// <summary>
+    /// Gets a user by id.
+    /// </summary>
+    /// <param name="id">User identifier.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<User>> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        var user = await _mediator.Send(new GetUserByIdQuery(id), cancellationToken);
+        if (user is null)
+        {
+            _logger.LogWarning("User {UserId} was not found.", id);
+            return NotFound();
+        }
+
+        _logger.LogInformation("User {UserId} retrieved.", id);
         return Ok(user);
     }
 
+    /// <summary>
+    /// Creates a user.
+    /// </summary>
     [HttpPost]
-    public async Task<IActionResult> Post(CreateUserCommand command)
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Create(CreateUserCommand command, CancellationToken cancellationToken)
     {
-        var id = await _mediator.Send(command);
-        return CreatedAtAction(nameof(Get), new { id }, null);
+        var id = await _mediator.Send(command, cancellationToken);
+        _logger.LogInformation("User {UserId} created.", id);
+        return CreatedAtAction(nameof(GetById), new { id }, null);
     }
 
+    /// <summary>
+    /// Updates a user.
+    /// </summary>
+    /// <param name="id">User identifier from the route.</param>
+    /// <param name="command">Updated user data.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
     [HttpPut("{id}")]
-    public async Task<IActionResult> Put(Guid id, UpdateUserCommand command)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Update(Guid id, UpdateUserCommand command, CancellationToken cancellationToken)
     {
-        if (id != command.Id) return BadRequest();
-        await _mediator.Send(command);
+        if (id != command.Id)
+        {
+            _logger.LogWarning("User update rejected because route id {RouteId} differs from body id {BodyId}.", id, command.Id);
+            return BadRequest();
+        }
+
+        await _mediator.Send(command, cancellationToken);
+        _logger.LogInformation("User {UserId} updated.", id);
         return NoContent();
     }
 
+    /// <summary>
+    /// Deletes a user.
+    /// </summary>
+    /// <param name="id">User identifier.</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await _mediator.Send(new DeleteUserCommand(id));
+        await _mediator.Send(new DeleteUserCommand(id), cancellationToken);
+        _logger.LogInformation("User {UserId} deleted.", id);
         return NoContent();
     }
 }
