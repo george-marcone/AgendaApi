@@ -35,6 +35,26 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (FluentValidation.ValidationException validationException)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            errors = validationException.Errors.Select(error => new
+            {
+                field = error.PropertyName,
+                message = error.ErrorMessage
+            })
+        });
+    }
+});
+
 app.UseHttpsRedirection();
 app.MapControllers();
 

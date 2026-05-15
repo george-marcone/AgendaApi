@@ -42,6 +42,18 @@ Email NVARCHAR(200) NOT NULL
 Phone NVARCHAR(50) NOT NULL
 ```
 
+Regras de unicidade:
+
+- `Email` nao pode ser repetido.
+- `Phone` nao pode ser repetido.
+
+Essas regras sao validadas na camada de aplicacao com FluentValidation e tambem protegidas no banco com indices unicos:
+
+```text
+IX_Users_Email
+IX_Users_Phone
+```
+
 Credenciais do SQL Server no Docker:
 
 ```text
@@ -234,6 +246,8 @@ Validacao:
 - `CreateUserCommandValidator`
 - `UpdateUserCommandValidator`
 - `ValidationBehavior<TRequest, TResponse>`
+
+Os validators bloqueiam email e telefone repetidos em operacoes de criacao e atualizacao.
 
 O `Program.cs` registra MediatR, FluentValidation, pipeline behavior, controllers e infraestrutura. Ele e necessario como composition root da API, mas a regra de CQRS fica na camada `CoreFlow.Application`.
 

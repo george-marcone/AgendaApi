@@ -18,9 +18,11 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>(b =>
         {
             b.HasKey(u => u.Id);
-            b.Property(u => u.Name).IsRequired();
-            b.Property(u => u.Email);
-            b.Property(u => u.Phone);
+            b.Property(u => u.Name).IsRequired().HasMaxLength(200);
+            b.Property(u => u.Email).IsRequired().HasMaxLength(200);
+            b.Property(u => u.Phone).IsRequired().HasMaxLength(50);
+            b.HasIndex(u => u.Email).IsUnique();
+            b.HasIndex(u => u.Phone).IsUnique();
         });
     }
 }

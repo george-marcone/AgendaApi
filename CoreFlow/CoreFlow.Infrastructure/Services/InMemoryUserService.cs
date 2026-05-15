@@ -24,6 +24,26 @@ public class InMemoryUserService : IUserService
         return Task.FromResult(p);
     }
 
+    public Task<bool> EmailExistsAsync(string email, Guid? ignoredUserId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.Trim();
+        var exists = _items.Any(x =>
+            string.Equals(x.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase)
+            && (!ignoredUserId.HasValue || x.Id != ignoredUserId.Value));
+
+        return Task.FromResult(exists);
+    }
+
+    public Task<bool> PhoneExistsAsync(string phone, Guid? ignoredUserId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedPhone = phone.Trim();
+        var exists = _items.Any(x =>
+            string.Equals(x.Phone, normalizedPhone, StringComparison.OrdinalIgnoreCase)
+            && (!ignoredUserId.HasValue || x.Id != ignoredUserId.Value));
+
+        return Task.FromResult(exists);
+    }
+
     public Task UpdateAsync(User user)
     {
         var idx = _items.FindIndex(x => x.Id == user.Id);

@@ -2,4 +2,4 @@ using MediatR;
 
 namespace CoreFlow.Application.Commands;
 
-public record DeleteUserCommand(Guid Id) : IRequest;
+public record DeleteUserCommand(Guid Id) : IRequest<Unit>;

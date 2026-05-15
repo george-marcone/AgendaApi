@@ -27,6 +27,22 @@ public class EfUserService : IUserService
         return await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
     }
 
+    public async Task<bool> EmailExistsAsync(string email, Guid? ignoredUserId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.Trim();
+        return await _db.Users
+            .AsNoTracking()
+            .AnyAsync(x => x.Email == normalizedEmail && (!ignoredUserId.HasValue || x.Id != ignoredUserId.Value), cancellationToken);
+    }
+
+    public async Task<bool> PhoneExistsAsync(string phone, Guid? ignoredUserId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedPhone = phone.Trim();
+        return await _db.Users
+            .AsNoTracking()
+            .AnyAsync(x => x.Phone == normalizedPhone && (!ignoredUserId.HasValue || x.Id != ignoredUserId.Value), cancellationToken);
+    }
+
     public async Task UpdateAsync(User user)
     {
         _db.Users.Update(user);

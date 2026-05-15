@@ -20,6 +20,12 @@ CREATE TABLE dbo.Users (
 );
 GO
 
+CREATE UNIQUE INDEX IX_Users_Email ON dbo.Users (Email);
+GO
+
+CREATE UNIQUE INDEX IX_Users_Phone ON dbo.Users (Phone);
+GO
+
 -- Popula com 50 registros
 SET NOCOUNT ON;
 
