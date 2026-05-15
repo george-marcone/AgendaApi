@@ -1,4 +1,4 @@
-namespace CoreFlow.Infrastructure.Security;
+namespace CoreFlow.Application.Interfaces;
 
 public interface IPasswordHasher
 {

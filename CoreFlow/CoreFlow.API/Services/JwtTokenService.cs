@@ -18,7 +18,7 @@ public class JwtTokenService : IJwtTokenService
         _options = options.Value;
     }
 
-    public JwtTokenResult CreateToken(AuthUser user)
+    public JwtTokenResult CreateToken(User user)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_options.ExpiresMinutes);
         var signingCredentials = new SigningCredentials(

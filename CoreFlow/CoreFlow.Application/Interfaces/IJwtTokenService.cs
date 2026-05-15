@@ -4,7 +4,7 @@ namespace CoreFlow.Application.Interfaces;
 
 public interface IJwtTokenService
 {
-    JwtTokenResult CreateToken(AuthUser user);
+    JwtTokenResult CreateToken(User user);
 }
 
 public record JwtTokenResult(string AccessToken, DateTimeOffset ExpiresAt);

@@ -15,24 +15,13 @@ namespace CoreFlow.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            modelBuilder.Entity("CoreFlow.Domain.Entities.AuthUser", b =>
-            {
-                b.Property<Guid>("Id").HasColumnType("uniqueidentifier");
-                b.Property<DateTimeOffset>("CreatedAt").HasColumnType("datetimeoffset").IsRequired();
-                b.Property<string>("Email").HasColumnType("nvarchar(200)").HasMaxLength(200).IsRequired();
-                b.Property<string>("Name").HasColumnType("nvarchar(200)").HasMaxLength(200).IsRequired();
-                b.Property<string>("PasswordHash").HasColumnType("nvarchar(500)").HasMaxLength(500).IsRequired();
-                b.HasKey("Id");
-                b.HasIndex("Email").IsUnique();
-                b.ToTable("AuthUsers");
-            });
-
             modelBuilder.Entity("CoreFlow.Domain.Entities.User", b =>
             {
                 b.Property<Guid>("Id").HasColumnType("uniqueidentifier");
                 b.Property<DateTimeOffset>("CreatedAt").HasColumnType("datetimeoffset").IsRequired();
                 b.Property<string>("Email").HasColumnType("nvarchar(200)").HasMaxLength(200).IsRequired();
                 b.Property<string>("Name").HasColumnType("nvarchar(200)").HasMaxLength(200).IsRequired();
+                b.Property<string>("PasswordHash").HasColumnType("nvarchar(500)").HasMaxLength(500).IsRequired();
                 b.Property<string>("Phone").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
                 b.HasKey("Id");
                 b.HasIndex("CreatedAt");

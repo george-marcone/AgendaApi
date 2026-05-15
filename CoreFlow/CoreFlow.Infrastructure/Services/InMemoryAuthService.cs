@@ -6,7 +6,7 @@ namespace CoreFlow.Infrastructure.Services;
 
 public class InMemoryAuthService : IAuthService
 {
-    private readonly List<AuthUser> _items = new();
+    private readonly List<User> _items = new();
     private readonly IPasswordHasher _passwordHasher;
 
     public InMemoryAuthService(IPasswordHasher passwordHasher)
@@ -14,18 +14,20 @@ public class InMemoryAuthService : IAuthService
         _passwordHasher = passwordHasher;
     }
 
-    public Task<AuthUser> CreateAsync(string name, string email, string password, CancellationToken cancellationToken = default)
+    public Task<User> CreateAsync(string name, string email, string phone, string password, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = NormalizeEmail(email);
-        if (_items.Any(x => x.Email == normalizedEmail))
+        var normalizedPhone = phone.Trim();
+        if (_items.Any(x => x.Email == normalizedEmail || x.Phone == normalizedPhone))
         {
-            throw new InvalidOperationException("Auth user email already exists.");
+            throw new InvalidOperationException("User email or phone already exists.");
         }
 
-        var user = new AuthUser
+        var user = new User
         {
             Name = name.Trim(),
             Email = normalizedEmail,
+            Phone = normalizedPhone,
             PasswordHash = _passwordHasher.Hash(password)
         };
 
@@ -33,22 +35,22 @@ public class InMemoryAuthService : IAuthService
         return Task.FromResult(user);
     }
 
-    public Task<AuthUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = _items.FirstOrDefault(x => x.Id == id);
         return Task.FromResult(user);
     }
 
-    public Task<AuthUser?> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken = default)
+    public Task<User?> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = NormalizeEmail(email);
         var user = _items.FirstOrDefault(x => x.Email == normalizedEmail);
         if (user is null || !_passwordHasher.Verify(password, user.PasswordHash))
         {
-            return Task.FromResult<AuthUser?>(null);
+            return Task.FromResult<User?>(null);
         }
 
-        return Task.FromResult<AuthUser?>(user);
+        return Task.FromResult<User?>(user);
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();

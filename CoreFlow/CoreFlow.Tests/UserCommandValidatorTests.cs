@@ -11,7 +11,7 @@ public class UserCommandValidatorTests
     public async Task CreateUserCommandValidator_AcceptsPhoneWithPlusAndThirteenDigits()
     {
         var validator = new CreateUserCommandValidator(new EmptyUserService());
-        var command = new CreateUserCommand("George Marcone", "gmarcone@example.com", "+5511900000001");
+        var command = new CreateUserCommand("George Marcone", "gmarcone@example.com", "+5511900000001", "User@123456");
 
         var result = await validator.ValidateAsync(command);
 
@@ -25,12 +25,26 @@ public class UserCommandValidatorTests
     public async Task CreateUserCommandValidator_RejectsPhonesOutsideExpectedFormat(string phone)
     {
         var validator = new CreateUserCommandValidator(new EmptyUserService());
-        var command = new CreateUserCommand("George Marcone", "gmarcone@example.com", phone);
+        var command = new CreateUserCommand("George Marcone", "gmarcone@example.com", phone, "User@123456");
 
         var result = await validator.ValidateAsync(command);
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(CreateUserCommand.Phone));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1234567")]
+    public async Task CreateUserCommandValidator_RejectsInvalidPassword(string password)
+    {
+        var validator = new CreateUserCommandValidator(new EmptyUserService());
+        var command = new CreateUserCommand("George Marcone", "gmarcone@example.com", "+5511900000001", password);
+
+        var result = await validator.ValidateAsync(command);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == nameof(CreateUserCommand.Password));
     }
 
     [Fact]

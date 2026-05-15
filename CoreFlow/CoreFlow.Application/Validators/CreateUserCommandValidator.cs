@@ -20,6 +20,9 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
             .Matches("^\\+[0-9]{13}$").WithMessage("Phone is invalid")
             .MustAsync(async (phone, cancellationToken) => !await userService.PhoneExistsAsync(phone, cancellationToken: cancellationToken))
             .WithMessage("Phone already exists");
+
+        RuleFor(x => x.Password)
+            .NotEmpty().WithMessage("Password is required")
+            .MinimumLength(8).WithMessage("Password must contain at least 8 characters");
     }
 }
-

@@ -17,42 +17,44 @@ public class EfAuthService : IAuthService
         _passwordHasher = passwordHasher;
     }
 
-    public async Task<AuthUser> CreateAsync(string name, string email, string password, CancellationToken cancellationToken = default)
+    public async Task<User> CreateAsync(string name, string email, string phone, string password, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = NormalizeEmail(email);
-        var existingUser = await _db.AuthUsers
+        var normalizedPhone = phone.Trim();
+        var existingUser = await _db.Users
             .AsNoTracking()
-            .AnyAsync(x => x.Email == normalizedEmail, cancellationToken);
+            .AnyAsync(x => x.Email == normalizedEmail || x.Phone == normalizedPhone, cancellationToken);
 
         if (existingUser)
         {
-            throw new InvalidOperationException("Auth user email already exists.");
+            throw new InvalidOperationException("User email or phone already exists.");
         }
 
-        var user = new AuthUser
+        var user = new User
         {
             Name = name.Trim(),
             Email = normalizedEmail,
+            Phone = normalizedPhone,
             PasswordHash = _passwordHasher.Hash(password)
         };
 
-        _db.AuthUsers.Add(user);
+        _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
 
         return user;
     }
 
-    public Task<AuthUser?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _db.AuthUsers
+        return _db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
-    public async Task<AuthUser?> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken = default)
+    public async Task<User?> ValidateCredentialsAsync(string email, string password, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = NormalizeEmail(email);
-        var user = await _db.AuthUsers
+        var user = await _db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
 

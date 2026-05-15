@@ -31,7 +31,6 @@ As tabelas principais sao:
 
 ```text
 dbo.Users
-dbo.AuthUsers
 ```
 
 Colunas de `dbo.Users`:
@@ -41,15 +40,6 @@ Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
 Name NVARCHAR(200) NOT NULL
 Email NVARCHAR(200) NOT NULL
 Phone NVARCHAR(50) NOT NULL
-CreatedAt DATETIMEOFFSET NOT NULL
-```
-
-Colunas de `dbo.AuthUsers`:
-
-```sql
-Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
-Name NVARCHAR(200) NOT NULL
-Email NVARCHAR(200) NOT NULL
 PasswordHash NVARCHAR(500) NOT NULL
 CreatedAt DATETIMEOFFSET NOT NULL
 ```
@@ -58,14 +48,12 @@ Regras de unicidade:
 
 - `Users.Email` nao pode ser repetido.
 - `Users.Phone` nao pode ser repetido.
-- `AuthUsers.Email` nao pode ser repetido.
 
 As regras do CRUD sao validadas na camada de aplicacao com FluentValidation. As regras de unicidade tambem sao protegidas no banco com indices unicos:
 
 ```text
 IX_Users_Email
 IX_Users_Phone
-IX_AuthUsers_Email
 ```
 
 Credenciais do SQL Server no Docker:
@@ -180,6 +168,7 @@ $body = @{
   name = "George Santos"
   email = "gmarcones@email.com"
   phone = "+5581997442241"
+  password = "User@123456"
 } | ConvertTo-Json
 
 Invoke-WebRequest `
@@ -244,7 +233,8 @@ Payload de criacao:
 {
   "name": "George Marcone",
   "email": "gmarcone@gmail.com",
-  "phone": "+5581997233344"
+  "phone": "+5581997233344",
+  "password": "User@123456"
 }
 ```
 
@@ -275,7 +265,7 @@ Arquivos principais:
 - `CoreFlow.Infrastructure/Data/AppDbContext.cs`
 - `CoreFlow.Infrastructure/Migrations/20260514_InitialCreate.cs`
 - `CoreFlow.Infrastructure/Migrations/20260515_AddUserCreatedAt.cs`
-- `CoreFlow.Infrastructure/Migrations/20260515_AddAuthUsers.cs`
+- `CoreFlow.Infrastructure/Migrations/20260515_AddUserPasswordHash.cs`
 - `CoreFlow.Infrastructure/Migrations/CoreFlow.InfrastructureModelSnapshot.cs`
 
 Listar migrations:
@@ -294,7 +284,7 @@ dotnet ef database update `
   --startup-project CoreFlow.API/CoreFlow.API.csproj
 ```
 
-Observacao: o `docker/sql/init.sql` tambem cria `dbo.Users`, `dbo.AuthUsers`, popula 50 contatos e cria o usuario inicial de autenticacao. Em ambiente controlado, escolha um fluxo principal para criar o banco: migrations do EF Core ou script SQL de inicializacao.
+Observacao: o `docker/sql/init.sql` tambem cria `dbo.Users`, popula 50 contatos e cria o usuario inicial de autenticacao. Em ambiente controlado, escolha um fluxo principal para criar o banco: migrations do EF Core ou script SQL de inicializacao.
 
 ## CQRS
 

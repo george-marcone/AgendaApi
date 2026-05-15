@@ -30,7 +30,7 @@ public class AuthTests
     public async Task AuthService_ValidatesCredentialsByEmailAndPassword()
     {
         var service = new InMemoryAuthService(new PasswordHasher());
-        var user = await service.CreateAsync("Admin", "Admin@CoreFlow.Local", "Admin@123456");
+        var user = await service.CreateAsync("Admin", "Admin@CoreFlow.Local", "+5511900000000", "Admin@123456");
 
         var authenticatedUser = await service.ValidateCredentialsAsync("admin@coreflow.local", "Admin@123456");
         var rejectedUser = await service.ValidateCredentialsAsync("admin@coreflow.local", "wrong-password");
