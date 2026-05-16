@@ -18,11 +18,13 @@ public class UserTests
     }
 
     [Fact]
-    public async Task GetAllAsync_ReturnsNewestUsersFirst()
+    public async Task GetAllAsync_ReturnsMostRecentlyCreatedOrUpdatedUsersFirst()
     {
         var service = new InMemoryUserService();
         var olderId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var newerId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        var olderCreatedAt = new DateTimeOffset(2020, 5, 14, 10, 0, 0, TimeSpan.Zero);
+        var newerCreatedAt = new DateTimeOffset(2020, 5, 15, 10, 0, 0, TimeSpan.Zero);
 
         await service.AddAsync(new User
         {
@@ -30,7 +32,8 @@ public class UserTests
             Name = "Older",
             Email = "older@example.com",
             Phone = "+5511900000001",
-            CreatedAt = new DateTimeOffset(2026, 5, 14, 10, 0, 0, TimeSpan.Zero)
+            CreatedAt = olderCreatedAt,
+            UpdatedAt = olderCreatedAt
         });
 
         await service.AddAsync(new User
@@ -39,20 +42,29 @@ public class UserTests
             Name = "Newer",
             Email = "newer@example.com",
             Phone = "+5511900000002",
-            CreatedAt = new DateTimeOffset(2026, 5, 15, 10, 0, 0, TimeSpan.Zero)
+            CreatedAt = newerCreatedAt,
+            UpdatedAt = newerCreatedAt
+        });
+
+        await service.UpdateAsync(new User
+        {
+            Id = olderId,
+            Name = "Older Updated",
+            Email = "older.updated@example.com",
+            Phone = "+5511900000003"
         });
 
         var users = await service.GetAllAsync();
 
-        Assert.Equal(new[] { newerId, olderId }, users.Select(x => x.Id));
+        Assert.Equal(new[] { olderId, newerId }, users.Select(x => x.Id));
     }
 
     [Fact]
-    public async Task UpdateAsync_PreservesCreatedAt()
+    public async Task UpdateAsync_PreservesCreatedAtAndRefreshesUpdatedAt()
     {
         var service = new InMemoryUserService();
         var id = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        var createdAt = new DateTimeOffset(2026, 5, 14, 10, 0, 0, TimeSpan.Zero);
+        var createdAt = new DateTimeOffset(2020, 5, 14, 10, 0, 0, TimeSpan.Zero);
 
         await service.AddAsync(new User
         {
@@ -60,7 +72,8 @@ public class UserTests
             Name = "Original",
             Email = "original@example.com",
             Phone = "+5511900000001",
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
         });
 
         await service.UpdateAsync(new User
@@ -76,6 +89,7 @@ public class UserTests
         Assert.NotNull(user);
         Assert.Equal("Updated", user.Name);
         Assert.Equal(createdAt, user.CreatedAt);
+        Assert.True(user.UpdatedAt > createdAt);
     }
 
     [Fact]
@@ -93,7 +107,8 @@ public class UserTests
             Email = "original@example.com",
             Phone = "+5511900000001",
             PasswordHash = passwordHasher.Hash("Admin@123456"),
-            CreatedAt = createdAt
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
         });
 
         var handler = new ChangeOwnPasswordHandler(service, passwordHasher);

@@ -30,12 +30,15 @@ public class EfAuthService : IAuthService
             throw new InvalidOperationException("User email or phone already exists.");
         }
 
+        var now = DateTimeOffset.UtcNow;
         var user = new User
         {
             Name = name.Trim(),
             Email = normalizedEmail,
             Phone = normalizedPhone,
-            PasswordHash = _passwordHasher.Hash(password)
+            PasswordHash = _passwordHasher.Hash(password),
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _db.Users.Add(user);

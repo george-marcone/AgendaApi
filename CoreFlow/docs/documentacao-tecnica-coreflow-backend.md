@@ -8,7 +8,7 @@ O CoreFlow é o backend da Agenda de Contatos. Ele foi desenvolvido em ASP.NET C
 
 No código do backend, o contato da agenda é representado pela entidade `User`. Por isso, os endpoints aparecem como `/api/User`, mas no contexto funcional da aplicação eles atendem ao cadastro, consulta, edição, exclusão e listagem dos contatos da agenda.
 
-A aplicação usa SQL Server como banco de dados principal, Entity Framework Core como ORM, MediatR para CQRS, FluentValidation para regras de validação, Swagger/OpenAPI para documentação dos endpoints, Serilog para logs, Docker para empacotamento e xUnit para testes automatizados.
+A aplicação usa SQL Server como banco de dados principal, Entity Framework Core como ORM, MediatR para CQRS, FluentValidation para regras de validação, RabbitMQ para eventos assíncronos, um Worker .NET para envio de e-mails, Swagger/OpenAPI para documentação dos endpoints, Serilog para logs, Docker para empacotamento e xUnit para testes automatizados.
 
 ## 2. Tipo de arquitetura utilizada
 
@@ -24,6 +24,7 @@ Camadas principais:
 | Application | Regras de aplicação, commands, queries, handlers, validators, interfaces e pipeline de validação. | `CoreFlow.Application` |
 | Domain | Entidades de domínio. | `CoreFlow.Domain` |
 | Infrastructure | EF Core, `DbContext`, serviços concretos, migrations, persistência e hash de senha. | `CoreFlow.Infrastructure` |
+| Worker | Consome eventos do RabbitMQ e envia e-mails por SMTP quando contatos são criados, atualizados ou removidos. | `CoreFlow.Worker` |
 | Tests | Testes unitários de domínio, validação, autenticação e regras principais. | `CoreFlow.Tests` |
 
 Fluxo arquitetural resumido:
@@ -35,7 +36,9 @@ Fluxo arquitetural resumido:
 5. O handler executa o caso de uso.
 6. O handler usa interfaces da aplicação, como `IUserService` ou `IPasswordHasher`.
 7. A infraestrutura implementa essas interfaces com EF Core, SQL Server e PBKDF2.
-8. O resultado volta para o controller e é convertido em resposta HTTP.
+8. Após criar, editar ou remover contato, o handler publica um evento de contato no RabbitMQ.
+9. O Worker consome o evento e envia e-mails ao usuário logado e ao contato afetado por SMTP.
+10. O resultado volta para o controller e é convertido em resposta HTTP.
 
 ## 3. Diagrama da arquitetura
 
@@ -47,12 +50,18 @@ flowchart TB
     Domain[CoreFlow.Domain<br/>Entidade User]
     Infra[CoreFlow.Infrastructure<br/>EF Core, Services, PasswordHasher]
     Db[(SQL Server<br/>CoreFlowDb.dbo.Users)]
+    Rabbit[(RabbitMQ<br/>coreflow.contacts)]
+    Worker[CoreFlow.Worker<br/>Email Notifications]
+    Smtp[Mailpit/SMTP<br/>E-mails de contato]
 
     Client -->|HTTP/JSON| Api
     Api -->|IMediator.Send| App
     App -->|usa entidade| Domain
     App -->|interfaces| Infra
     Infra -->|DbContext| Db
+    Infra -->|publica evento| Rabbit
+    Rabbit -->|consome evento| Worker
+    Worker -->|SMTP| Smtp
     Infra -->|retorna User/dados| App
     App -->|resultado| Api
     Api -->|HTTP response| Client
@@ -173,13 +182,55 @@ Serilog registra logs no console e em arquivos diários dentro de `logs`.
 
 ### Docker e Docker Compose
 
-Docker empacota a API e o banco. Docker Compose orquestra a API, SQL Server e o container auxiliar de inicialização do banco.
+Docker empacota a API e o Worker. Docker Compose orquestra API, Worker, RabbitMQ, Mailpit, SQL Server e o container auxiliar de inicialização do banco.
 
 | Arquivo | Função |
 | --- | --- |
 | `Dockerfile` | Build multi-stage: SDK .NET 10 para publicar e runtime ASP.NET 10 para executar. |
-| `docker-compose.yml` | Sobe `api`, `db` e `db-init`. |
+| `docker-compose.yml` | Sobe `api`, `worker`, `rabbitmq`, `mailpit`, `db` e `db-init`. |
 | `docker/sql/init.sql` | Cria banco, tabela, índices e registros iniciais. |
+
+### RabbitMQ
+
+RabbitMQ é usado como broker de mensagens para desacoplar o CRUD de contatos do envio de e-mails. A API não envia o e-mail diretamente durante a requisição; ela salva a alteração no SQL Server e publica um evento no RabbitMQ.
+
+Cada evento leva os dados do contato afetado e os dados do usuário logado que executou a ação. O Worker usa essas informações para enviar duas mensagens:
+
+| Destinatário | Mensagem |
+| --- | --- |
+| Usuário logado | Confirma que ele cadastrou, alterou ou removeu o contato, com os dados envolvidos. |
+| Contato afetado | Informa que ele foi adicionado, alterado ou removido pelo usuário logado. |
+
+| Uso | Onde está |
+| --- | --- |
+| Evento publicado | `CoreFlow.Application/Events/ContactChangedEvent.cs` |
+| Interface de publicação | `CoreFlow.Application/Interfaces/IContactEventPublisher.cs` |
+| Publicador RabbitMQ | `CoreFlow.Infrastructure/Messaging/RabbitMqContactEventPublisher.cs` |
+| Configuração | `CoreFlow.Infrastructure/Messaging/RabbitMqOptions.cs`, `appsettings.json`, `docker-compose.yml` |
+| Exchange | `coreflow.contacts` |
+| Fila | `coreflow.contact.email-notifications` |
+| Routing key | `contact.changed` |
+
+Eventos emitidos:
+
+| Evento | Quando ocorre |
+| --- | --- |
+| `Created` | Depois que um contato é cadastrado. |
+| `Updated` | Depois que um contato é editado. |
+| `Deleted` | Depois que um contato é removido. |
+
+### Worker de e-mail e SMTP
+
+O `CoreFlow.Worker` é uma aplicação em background. Ele consome a fila do RabbitMQ e envia e-mails para o usuário logado e para o contato afetado pelo evento.
+
+| Uso | Onde está |
+| --- | --- |
+| Worker principal | `CoreFlow.Worker/Messaging/ContactEmailNotificationWorker.cs` |
+| Envio via SMTP | `CoreFlow.Worker/Email/SmtpEmailSender.cs` |
+| Configurações de SMTP | `CoreFlow.Worker/Email/EmailOptions.cs`, `CoreFlow.Worker/appsettings.json` |
+| Dockerfile do Worker | `CoreFlow.Worker/Dockerfile` |
+
+Em desenvolvimento, o envio é direcionado para o Mailpit, que funciona como uma caixa de entrada web para visualizar os e-mails sem usar um provedor real. Nessa configuração padrão, as mensagens não chegam em uma caixa real do Gmail/Outlook; elas aparecem em `http://localhost:8025`.
 
 ### xUnit, Microsoft.NET.Test.Sdk e coverlet
 
@@ -228,6 +279,102 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | URL alternativa pelo nome do container | `http://coreflow_api:8080` |
 | URL local via `dotnet run` HTTP | `http://localhost:5062` |
 | URL local via `dotnet run` HTTPS | `https://localhost:7200` |
+
+### Worker de e-mail
+
+| Item | Valor |
+| --- | --- |
+| Serviço no `docker-compose.yml` | `worker` |
+| Nome do container | `coreflow_worker` |
+| Função | Consumir eventos do RabbitMQ e enviar e-mails por SMTP. |
+| Fila consumida | `coreflow.contact.email-notifications` |
+| Exchange | `coreflow.contacts` |
+| Routing key | `contact.changed` |
+
+### RabbitMQ
+
+| Item | Valor |
+| --- | --- |
+| Serviço no `docker-compose.yml` | `rabbitmq` |
+| Nome do container | `coreflow_rabbitmq` |
+| Porta AMQP | `localhost:5672` |
+| Painel de gerenciamento | `http://localhost:15672` |
+| Usuário | `guest` |
+| Senha | `guest` |
+
+### Mailpit SMTP
+
+| Item | Valor |
+| --- | --- |
+| Serviço no `docker-compose.yml` | `mailpit` |
+| Nome do container | `coreflow_mailpit` |
+| SMTP | `localhost:1025` |
+| Interface web | `http://localhost:8025` |
+| Função | Receber e exibir os e-mails enviados pelo Worker em desenvolvimento. |
+
+### Como testar o fluxo de e-mail
+
+Com os containers ativos, o teste funcional do fluxo é:
+
+1. Subir a stack com `docker compose up -d --build`.
+2. Fazer login em `POST /api/Auth/login`.
+3. Cadastrar um contato em `POST /api/User`.
+4. Verificar os dois e-mails de cadastro em `http://localhost:8025`.
+5. Editar o mesmo contato em `PUT /api/User/{id}`.
+6. Verificar os dois e-mails de atualização no Mailpit.
+7. Remover o contato em `DELETE /api/User/{id}`.
+8. Verificar os dois e-mails de remoção no Mailpit.
+
+O painel do RabbitMQ fica em:
+
+```text
+http://localhost:15672
+```
+
+Credenciais de desenvolvimento:
+
+```text
+User: guest
+Password: guest
+```
+
+No painel é possível acompanhar a fila:
+
+```text
+coreflow.contact.email-notifications
+```
+
+### Configuração para SMTP real
+
+O ambiente de desenvolvimento usa Mailpit para não depender de um provedor externo. Para enviar e-mails reais, o serviço `worker` deve receber configurações reais de SMTP. O `docker-compose.yml` lê variáveis `CORE_FLOW_SMTP_*`, que podem ser configuradas em um arquivo `.env` criado a partir de `.env.example`.
+
+| Variável | Finalidade |
+| --- | --- |
+| `Email__Host` | Host SMTP, por exemplo servidor do provedor de e-mail. |
+| `Email__Port` | Porta SMTP. |
+| `Email__EnableSsl` | Define se usa SSL/TLS. |
+| `Email__UserName` | Usuário de autenticação SMTP. |
+| `Email__Password` | Senha ou app password do SMTP. |
+| `Email__FromAddress` | E-mail remetente. |
+| `Email__FromName` | Nome exibido do remetente. |
+
+Com SMTP real, o RabbitMQ continua igual. A única troca é o destino do `SmtpEmailSender`: em vez de entregar no Mailpit, ele entrega no servidor SMTP configurado.
+
+Exemplo para Gmail SMTP:
+
+```env
+CORE_FLOW_SMTP_HOST=smtp.gmail.com
+CORE_FLOW_SMTP_PORT=587
+CORE_FLOW_SMTP_ENABLE_SSL=true
+CORE_FLOW_SMTP_USERNAME=gmarcone@gmail.com
+CORE_FLOW_SMTP_PASSWORD=SUA_APP_PASSWORD_DO_GMAIL
+CORE_FLOW_SMTP_FROM_ADDRESS=gmarcone@gmail.com
+CORE_FLOW_SMTP_FROM_NAME=CoreFlow Agenda
+```
+
+Para Gmail, a senha precisa ser uma app password do Google. A senha normal da conta não deve ser usada para SMTP.
+
+O e-mail do usuário logado é obtido das claims do JWT. Se o login for feito com o usuário seedado `admin@coreflow.local`, a notificação do usuário logado será endereçada para `admin@coreflow.local`. Para receber essa notificação em `gmarcone@gmail.com`, o usuário autenticado precisa ter esse e-mail.
 
 ### Banco de dados
 
@@ -295,6 +442,7 @@ Colunas:
 | `Phone` | `NVARCHAR(50)` | Obrigatória e única. |
 | `PasswordHash` | `NVARCHAR(500)` | Obrigatória, armazena hash PBKDF2. |
 | `CreatedAt` | `DATETIMEOFFSET` | Obrigatória, preenchida na entidade com `DateTimeOffset.UtcNow`. |
+| `UpdatedAt` | `DATETIMEOFFSET` | Obrigatória, atualizada quando o contato é editado. |
 
 Índices:
 
@@ -303,6 +451,7 @@ Colunas:
 | `IX_Users_Email` | Único | `Email` |
 | `IX_Users_Phone` | Único | `Phone` |
 | `IX_Users_CreatedAt` | Não único | `CreatedAt` |
+| `IX_Users_UpdatedAt` | Não único | `UpdatedAt` |
 
 Arquivos relacionados:
 
@@ -313,6 +462,7 @@ Arquivos relacionados:
 | `CoreFlow.Infrastructure/Migrations/20260515_AddUserCreatedAt.cs` | Adiciona `CreatedAt`. |
 | `CoreFlow.Infrastructure/Migrations/20260515_AddUserPasswordHash.cs` | Adiciona `PasswordHash`. |
 | `CoreFlow.Infrastructure/Migrations/20260515_AddUniqueUserEmailPhoneIndexes.cs` | Adiciona índices únicos. |
+| `CoreFlow.Infrastructure/Migrations/20260516_AddUserUpdatedAt.cs` | Adiciona `UpdatedAt` e índice de ordenação por atualização. |
 | `docker/sql/init.sql` | Script Docker que cria banco, tabela, índices, usuário admin e 50 registros. |
 
 ## 8. Endpoints disponíveis
@@ -334,7 +484,7 @@ Rotas da agenda/usuários:
 
 | Método | Endpoint | Autenticação | Finalidade |
 | --- | --- | --- | --- |
-| `GET` | `/api/User` | Bearer JWT | Lista contatos/usuários, ordenando pelos mais recentes. |
+| `GET` | `/api/User` | Bearer JWT | Lista contatos/usuários, ordenando pelos adicionados ou editados mais recentemente. |
 | `GET` | `/api/User/{id}` | Bearer JWT | Consulta contato/usuário por id. |
 | `POST` | `/api/User` | Bearer JWT | Cadastra contato/usuário. |
 | `PUT` | `/api/User/{id}` | Bearer JWT | Atualiza nome, e-mail e telefone. |
@@ -363,7 +513,7 @@ Rotas da agenda/usuários:
 4. O handler chama `IUserService.GetAllAsync`.
 5. Em ambiente com banco, a implementação é `EfUserService`.
 6. `EfUserService` consulta `AppDbContext.Users` com `AsNoTracking`.
-7. A consulta ordena por `CreatedAt` desc e depois por `Id` desc.
+7. A consulta ordena por `UpdatedAt` desc, depois por `CreatedAt` desc e por `Id` desc.
 8. O resultado volta como `User[]`.
 9. `UserController` retorna `200 OK` com a lista.
 
@@ -381,8 +531,11 @@ Rotas da agenda/usuários:
 10. `CreateUserHandler` cria um `User`, gera hash da senha com `IPasswordHasher` e chama `IUserService.AddAsync`.
 11. `EfUserService.AddAsync` adiciona o registro ao `DbSet<User>` e executa `SaveChangesAsync`.
 12. O SQL Server grava o contato em `CoreFlowDb.dbo.Users`.
-13. O handler retorna o `Guid` do novo contato.
-14. `UserController.Create` retorna `201 Created` com referência para `GetById`.
+13. O handler publica `ContactChangedEvent` com tipo `Created`.
+14. `RabbitMqContactEventPublisher` envia o evento para o RabbitMQ.
+15. O Worker consome o evento e envia e-mail para o usuário logado e para o contato cadastrado.
+16. O handler retorna o `Guid` do novo contato.
+17. `UserController.Create` retorna `201 Created` com referência para `GetById`.
 
 ### 9.4 Fluxo de edição de contato
 
@@ -391,9 +544,12 @@ Rotas da agenda/usuários:
 3. Se forem diferentes, retorna `400 Bad Request`.
 4. Se forem iguais, envia o command para o MediatR.
 5. `UpdateUserCommandValidator` valida os campos e checa duplicidade de e-mail/telefone ignorando o próprio id.
-6. `UpdateUserHandler` cria um `User` com os dados atualizados.
-7. `EfUserService.UpdateAsync` busca o registro existente, preserva `CreatedAt` e `PasswordHash`, atualiza nome, e-mail e telefone.
-8. O controller retorna `204 No Content`.
+6. `UpdateUserHandler` consulta o contato existente.
+7. `UpdateUserHandler` cria uma nova versão do `User` com os dados atualizados.
+8. `EfUserService.UpdateAsync` busca o registro existente, preserva `CreatedAt` e `PasswordHash`, atualiza nome, e-mail, telefone e `UpdatedAt`.
+9. O handler publica `ContactChangedEvent` com tipo `Updated`.
+10. O Worker consome o evento e envia e-mail para o usuário logado e para o contato atualizado.
+11. O controller retorna `204 No Content`.
 
 ### 9.5 Fluxo de troca da própria senha
 
@@ -406,6 +562,28 @@ Rotas da agenda/usuários:
 7. Se a senha atual estiver errada, retorna `InvalidCurrentPassword`.
 8. Se estiver correta, gera novo hash e chama `UpdatePasswordHashAsync`.
 9. A API retorna `204 No Content`.
+
+### 9.6 Fluxo de remoção de contato
+
+1. `UserController.Delete` exige JWT válido e recebe o `id` do contato.
+2. O controller envia `DeleteUserCommand` para o MediatR.
+3. `DeleteUserHandler` consulta o contato pelo id.
+4. Se o contato não existir, o handler encerra sem publicar evento.
+5. Se existir, `EfUserService.DeleteAsync` remove o registro do SQL Server.
+6. O handler publica `ContactChangedEvent` com tipo `Deleted`.
+7. O Worker consome o evento e envia e-mail para o usuário logado e para o contato removido.
+8. O controller retorna `204 No Content`.
+
+### 9.7 Fluxo assíncrono de e-mail
+
+1. `CreateUserHandler`, `UpdateUserHandler` ou `DeleteUserHandler` publica `ContactChangedEvent`.
+2. `RabbitMqContactEventPublisher` declara exchange, fila e binding se necessário.
+3. O evento é publicado no exchange `coreflow.contacts` com routing key `contact.changed`.
+4. A fila `coreflow.contact.email-notifications` recebe a mensagem.
+5. `ContactEmailNotificationWorker` consome a mensagem.
+6. `SmtpEmailSender` monta assunto e corpo conforme o tipo do evento e o destinatário.
+7. São enviados dois e-mails via SMTP: um para o usuário logado e outro para o contato afetado.
+8. Em desenvolvimento, o Mailpit recebe a mensagem e exibe em `http://localhost:8025`.
 
 ## 10. Diagrama de fluxo das classes do backend
 
@@ -426,7 +604,7 @@ flowchart LR
         Commands[Commands]
         Queries[Queries]
         Handlers[Handlers]
-        Interfaces[IUserService<br/>IAuthService<br/>IPasswordHasher<br/>IJwtTokenService]
+        Interfaces[IUserService<br/>IAuthService<br/>IPasswordHasher<br/>IJwtTokenService<br/>IContactEventPublisher]
     end
 
     subgraph Domain[CoreFlow.Domain]
@@ -438,10 +616,18 @@ flowchart LR
         EfAuthService[EfAuthService]
         InMemoryServices[InMemory Services]
         PasswordHasher[PasswordHasher]
+        RabbitPublisher[RabbitMqContactEventPublisher]
         AppDbContext[AppDbContext]
     end
 
+    subgraph Worker[CoreFlow.Worker]
+        EmailWorker[ContactEmailNotificationWorker]
+        SmtpSender[SmtpEmailSender]
+    end
+
     Db[(SQL Server<br/>CoreFlowDb.dbo.Users)]
+    Rabbit[(RabbitMQ<br/>coreflow.contact.email-notifications)]
+    Mailpit[(Mailpit/SMTP)]
 
     Program --> AuthController
     Program --> UserController
@@ -450,6 +636,7 @@ flowchart LR
     Program --> EfUserService
     Program --> EfAuthService
     Program --> PasswordHasher
+    Program --> RabbitPublisher
     Program --> SwaggerFilter
 
     UserController --> Mediator
@@ -467,6 +654,10 @@ flowchart LR
     EfAuthService --> PasswordHasher
     EfAuthService --> AppDbContext
     EfUserService --> AppDbContext
+    RabbitPublisher --> Rabbit
+    Rabbit --> EmailWorker
+    EmailWorker --> SmtpSender
+    SmtpSender --> Mailpit
     AppDbContext --> Db
     EfUserService --> User
     EfAuthService --> User
@@ -486,6 +677,10 @@ sequenceDiagram
     participant Handler as CreateUserHandler
     participant Hasher as IPasswordHasher / PasswordHasher
     participant Db as AppDbContext + SQL Server
+    participant Publisher as RabbitMqContactEventPublisher
+    participant Rabbit as RabbitMQ
+    participant Worker as CoreFlow.Worker
+    participant SMTP as Mailpit/SMTP
 
     Client->>Controller: POST /api/User<br/>Bearer token + JSON
     Controller->>Mediator: Send(CreateUserCommand)
@@ -505,6 +700,11 @@ sequenceDiagram
     Service->>Db: INSERT dbo.Users + SaveChangesAsync
     Db-->>Service: Registro salvo
     Service-->>Handler: Concluído
+    Handler->>Publisher: PublishAsync(ContactChangedEvent.Created)
+    Publisher->>Rabbit: Publica evento contact.changed
+    Rabbit-->>Worker: Entrega mensagem
+    Worker->>SMTP: Envia e-mail ao usuario logado
+    Worker->>SMTP: Envia e-mail ao contato cadastrado
     Handler-->>Mediator: Guid do novo contato
     Mediator-->>Controller: Guid
     Controller-->>Client: 201 Created
@@ -615,11 +815,13 @@ Quando a validação passa:
 
 1. `CreateUserHandler` cria um novo `User`.
 2. O `Id` é gerado automaticamente como `Guid`.
-3. O `CreatedAt` é preenchido automaticamente com `DateTimeOffset.UtcNow`.
+3. O `CreatedAt` e o `UpdatedAt` são preenchidos automaticamente com `DateTimeOffset.UtcNow`.
 4. A senha recebida é transformada em hash PBKDF2-SHA256.
 5. `EfUserService.AddAsync` salva o usuário/contato no SQL Server.
 6. O registro é persistido em `CoreFlowDb.dbo.Users`.
-7. A API retorna `201 Created`.
+7. `CreateUserHandler` publica um evento `Created` no RabbitMQ.
+8. O Worker consome o evento e envia um e-mail para o usuário logado e outro para o contato cadastrado.
+9. A API retorna `201 Created`.
 
 ### 13.7 Resposta de sucesso
 
@@ -670,6 +872,7 @@ public record User
     [JsonIgnore]
     public string PasswordHash { get; init; } = string.Empty;
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; init; }
 }
 ```
 
@@ -682,7 +885,8 @@ Observações:
 | `Email` | E-mail do contato e também credencial de login. |
 | `Phone` | Telefone do contato no formato normalizado. |
 | `PasswordHash` | Não é serializado no JSON por causa de `[JsonIgnore]`. |
-| `CreatedAt` | Usado para ordenar os contatos mais recentes primeiro. |
+| `CreatedAt` | Data de criação do contato. |
+| `UpdatedAt` | Data da última edição do contato; usada na listagem para trazer primeiro os contatos adicionados ou editados mais recentemente. |
 
 ## 15. Segurança
 
@@ -724,14 +928,15 @@ Cobertura atual:
 
 | Arquivo | O que testa |
 | --- | --- |
-| `CoreFlow.Tests/UserTests.cs` | Entidade `User`, ordenação por contatos mais recentes, preservação de `CreatedAt`, troca de senha e rejeição de senha atual inválida. |
+| `CoreFlow.Tests/UserTests.cs` | Entidade `User`, ordenação por contatos criados/editados mais recentemente, preservação de `CreatedAt`, troca de senha e rejeição de senha atual inválida. |
 | `CoreFlow.Tests/UserCommandValidatorTests.cs` | Telefone, senha, validators de criação, atualização e troca de senha. |
 | `CoreFlow.Tests/AuthTests.cs` | Hash de senha, validação do hash seedado e autenticação por e-mail/senha. |
+| `CoreFlow.Tests/ContactEventPublisherTests.cs` | Publicação de eventos `Created`, `Updated` e `Deleted` ao criar, editar e remover contatos. |
 
 ## 18. Resumo executivo
 
-O CoreFlow Backend é uma API ASP.NET Core em .NET 10, organizada em camadas e com CQRS via MediatR. A camada API recebe HTTP e documenta endpoints com Swagger/OpenAPI. A camada Application concentra commands, queries, handlers e validações. A camada Domain contém a entidade `User`, que no produto representa o contato da agenda. A camada Infrastructure implementa persistência com EF Core, SQL Server e segurança de senha com PBKDF2.
+O CoreFlow Backend é uma API ASP.NET Core em .NET 10, organizada em camadas e com CQRS via MediatR. A camada API recebe HTTP e documenta endpoints com Swagger/OpenAPI. A camada Application concentra commands, queries, handlers, validações e eventos. A camada Domain contém a entidade `User`, que no produto representa o contato da agenda. A camada Infrastructure implementa persistência com EF Core, SQL Server, segurança de senha com PBKDF2 e publicação de eventos no RabbitMQ. O `CoreFlow.Worker` consome esses eventos e envia e-mails por SMTP para o usuário logado e para o contato afetado.
 
-A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível principalmente em `http://localhost:5088/swagger` quando a API roda em Docker. O banco é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`.
+A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível principalmente em `http://localhost:5088/swagger` quando a API roda em Docker. O banco é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do Worker é `coreflow_worker`, o container do RabbitMQ é `coreflow_rabbitmq`, o container do Mailpit é `coreflow_mailpit`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`.
 
-A principal regra de negócio do cadastro de contatos é: somente usuário autenticado pode cadastrar; nome, e-mail, telefone e senha são obrigatórios; e-mail e telefone devem ser únicos; telefone precisa estar no formato `+` com 13 dígitos; senha precisa ter pelo menos 8 caracteres; a senha é salva apenas como hash; e o contato é gravado em `CoreFlowDb.dbo.Users` com `Id` e `CreatedAt` gerados automaticamente.
+A principal regra de negócio do cadastro de contatos é: somente usuário autenticado pode cadastrar; nome, e-mail, telefone e senha são obrigatórios; e-mail e telefone devem ser únicos; telefone precisa estar no formato `+` com 13 dígitos; senha precisa ter pelo menos 8 caracteres; a senha é salva apenas como hash; o contato é gravado em `CoreFlowDb.dbo.Users` com `Id`, `CreatedAt` e `UpdatedAt` gerados automaticamente; contatos editados têm `UpdatedAt` renovado e voltam ao topo da listagem; e um evento é publicado no RabbitMQ para que o Worker envie e-mail ao contato.

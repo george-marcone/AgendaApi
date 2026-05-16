@@ -23,9 +23,11 @@ public class AppDbContext : DbContext
             b.Property(u => u.Phone).IsRequired().HasMaxLength(50);
             b.Property(u => u.PasswordHash).IsRequired().HasMaxLength(500);
             b.Property(u => u.CreatedAt).IsRequired().HasColumnType("datetimeoffset");
+            b.Property(u => u.UpdatedAt).IsRequired().HasColumnType("datetimeoffset");
             b.HasIndex(u => u.Email).IsUnique();
             b.HasIndex(u => u.Phone).IsUnique();
             b.HasIndex(u => u.CreatedAt);
+            b.HasIndex(u => u.UpdatedAt);
         });
     }
 }

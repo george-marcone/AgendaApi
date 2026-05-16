@@ -13,7 +13,16 @@ public class EfUserService : IUserService
 
     public async Task AddAsync(User user)
     {
-        _db.Users.Add(user);
+        var now = DateTimeOffset.UtcNow;
+        var createdAt = user.CreatedAt == default ? now : user.CreatedAt;
+        var updatedAt = user.UpdatedAt == default ? createdAt : user.UpdatedAt;
+
+        _db.Users.Add(user with
+        {
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        });
+
         await _db.SaveChangesAsync();
     }
 
@@ -21,7 +30,8 @@ public class EfUserService : IUserService
     {
         return await _db.Users
             .AsNoTracking()
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ThenByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .ToArrayAsync();
     }
@@ -56,7 +66,8 @@ public class EfUserService : IUserService
         {
             Name = user.Name,
             Email = user.Email,
-            Phone = user.Phone
+            Phone = user.Phone,
+            UpdatedAt = DateTimeOffset.UtcNow
         });
 
         await _db.SaveChangesAsync();

@@ -23,10 +23,12 @@ namespace CoreFlow.Infrastructure.Migrations
                 b.Property<string>("Name").HasColumnType("nvarchar(200)").HasMaxLength(200).IsRequired();
                 b.Property<string>("PasswordHash").HasColumnType("nvarchar(500)").HasMaxLength(500).IsRequired();
                 b.Property<string>("Phone").HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
+                b.Property<DateTimeOffset>("UpdatedAt").HasColumnType("datetimeoffset").IsRequired();
                 b.HasKey("Id");
                 b.HasIndex("CreatedAt");
                 b.HasIndex("Email").IsUnique();
                 b.HasIndex("Phone").IsUnique();
+                b.HasIndex("UpdatedAt");
                 b.ToTable("Users");
             });
         }

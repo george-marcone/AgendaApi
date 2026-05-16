@@ -6,4 +6,5 @@
   <Project Path="CoreFlow.Domain/CoreFlow.Domain.csproj" />
   <Project Path="CoreFlow.Infrastructure/CoreFlow.Infrastructure.csproj" />
   <Project Path="CoreFlow.Tests/CoreFlow.Tests.csproj" />
+  <Project Path="CoreFlow.Worker/CoreFlow.Worker.csproj" />
 </Solution>

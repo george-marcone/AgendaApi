@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build:
@@ -13,6 +11,14 @@ services:
       Jwt__Audience: "CoreFlow.Frontend"
       Jwt__Key: "CoreFlow.Dev.Jwt.Secret.Change.This.Value.2026"
       Jwt__ExpiresMinutes: "60"
+      RabbitMq__Enabled: "true"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "guest"
+      RabbitMq__Password: "guest"
+      RabbitMq__ExchangeName: "coreflow.contacts"
+      RabbitMq__QueueName: "coreflow.contact.email-notifications"
+      RabbitMq__RoutingKey: "contact.changed"
     ports:
       - "5088:8080"
     volumes:
@@ -20,6 +26,56 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: CoreFlow.Worker/Dockerfile
+    container_name: coreflow_worker
+    environment:
+      RabbitMq__Enabled: "true"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "guest"
+      RabbitMq__Password: "guest"
+      RabbitMq__ExchangeName: "coreflow.contacts"
+      RabbitMq__QueueName: "coreflow.contact.email-notifications"
+      RabbitMq__RoutingKey: "contact.changed"
+      RabbitMq__RetryDelaySeconds: "5"
+      RabbitMq__PrefetchCount: "5"
+      Email__Host: "${CORE_FLOW_SMTP_HOST:-mailpit}"
+      Email__Port: "${CORE_FLOW_SMTP_PORT:-1025}"
+      Email__EnableSsl: "${CORE_FLOW_SMTP_ENABLE_SSL:-false}"
+      Email__UserName: "${CORE_FLOW_SMTP_USERNAME:-}"
+      Email__Password: "${CORE_FLOW_SMTP_PASSWORD:-}"
+      Email__FromAddress: "${CORE_FLOW_SMTP_FROM_ADDRESS:-noreply@coreflow.local}"
+      Email__FromName: "${CORE_FLOW_SMTP_FROM_NAME:-CoreFlow Agenda}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: coreflow_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: coreflow_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -43,7 +99,7 @@ services:
         condition: service_healthy
     volumes:
       - ./docker/sql:/scripts
-    entrypoint: ["/bin/bash","-c","/opt/mssql-tools18/bin/sqlcmd -S db -U sa -P $$SA_PASSWORD -C -i /scripts/init.sql"]
+    entrypoint: ["/bin/bash","-c","SQLCMD=/opt/mssql-tools18/bin/sqlcmd; if [ ! -x $$SQLCMD ]; then SQLCMD=/opt/mssql-tools/bin/sqlcmd; fi; $$SQLCMD -S db -U sa -P $$SA_PASSWORD -C -i /scripts/init.sql"]
     environment:
       SA_PASSWORD: "Str0ngP@ssw0rd!"
     restart: "no"

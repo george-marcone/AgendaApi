@@ -9,14 +9,24 @@ public class InMemoryUserService : IUserService
 
     public Task AddAsync(User user)
     {
-        _items.Add(user);
+        var now = DateTimeOffset.UtcNow;
+        var createdAt = user.CreatedAt == default ? now : user.CreatedAt;
+        var updatedAt = user.UpdatedAt == default ? createdAt : user.UpdatedAt;
+
+        _items.Add(user with
+        {
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        });
+
         return Task.CompletedTask;
     }
 
     public Task<User[]> GetAllAsync()
     {
         var users = _items
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ThenByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .ToArray();
 
@@ -58,7 +68,8 @@ public class InMemoryUserService : IUserService
             {
                 Name = user.Name,
                 Email = user.Email,
-                Phone = user.Phone
+                Phone = user.Phone,
+                UpdatedAt = DateTimeOffset.UtcNow
             };
         }
 

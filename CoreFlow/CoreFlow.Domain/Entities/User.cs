@@ -11,4 +11,5 @@ public record User
     [JsonIgnore]
     public string PasswordHash { get; init; } = string.Empty;
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; init; }
 }

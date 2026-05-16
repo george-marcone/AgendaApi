@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CoreFlow.Application.Commands;
+using CoreFlow.Application.Events;
 using CoreFlow.Application.Queries;
 using CoreFlow.Domain.Entities;
 using MediatR;
@@ -66,7 +67,12 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Create(CreateUserCommand command, CancellationToken cancellationToken)
     {
-        var id = await _mediator.Send(command, cancellationToken);
+        if (!TryGetAuthenticatedActor(out var actor))
+        {
+            return Unauthorized();
+        }
+
+        var id = await _mediator.Send(command with { Actor = actor }, cancellationToken);
         _logger.LogInformation("User {UserId} created.", id);
         return CreatedAtAction(nameof(GetById), new { id }, null);
     }
@@ -83,13 +89,18 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Update(Guid id, UpdateUserCommand command, CancellationToken cancellationToken)
     {
+        if (!TryGetAuthenticatedActor(out var actor))
+        {
+            return Unauthorized();
+        }
+
         if (id != command.Id)
         {
             _logger.LogWarning("User update rejected because route id {RouteId} differs from body id {BodyId}.", id, command.Id);
             return BadRequest();
         }
 
-        await _mediator.Send(command, cancellationToken);
+        await _mediator.Send(command with { Actor = actor }, cancellationToken);
         _logger.LogInformation("User {UserId} updated.", id);
         return NoContent();
     }
@@ -144,9 +155,33 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await _mediator.Send(new DeleteUserCommand(id), cancellationToken);
+        if (!TryGetAuthenticatedActor(out var actor))
+        {
+            return Unauthorized();
+        }
+
+        await _mediator.Send(new DeleteUserCommand(id, actor), cancellationToken);
         _logger.LogInformation("User {UserId} deleted.", id);
         return NoContent();
+    }
+
+    private bool TryGetAuthenticatedActor(out ContactEventActor actor)
+    {
+        actor = ContactEventActor.Unknown;
+
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            _logger.LogWarning("Request rejected because the authenticated user id claim was invalid.");
+            return false;
+        }
+
+        actor = new ContactEventActor(
+            userId,
+            User.FindFirstValue(ClaimTypes.Name) ?? "Usuario autenticado",
+            User.FindFirstValue(ClaimTypes.Email) ?? string.Empty);
+
+        return true;
     }
 }
 

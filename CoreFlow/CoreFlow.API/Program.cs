@@ -11,6 +11,7 @@ using CoreFlow.Application.Validators;
 using CoreFlow.Application.Interfaces;
 using CoreFlow.Infrastructure.Services;
 using CoreFlow.Infrastructure.Data;
+using CoreFlow.Infrastructure.Messaging;
 using CoreFlow.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -101,6 +102,8 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.AddSingleton<IContactEventPublisher, RabbitMqContactEventPublisher>();
 
 var connectionString = builder.Configuration.GetConnectionString("Default");
 if (!string.IsNullOrWhiteSpace(connectionString))
