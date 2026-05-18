@@ -14,6 +14,22 @@ public class SmtpEmailSender
     {
         _options = options.Value;
         _logger = logger;
+
+        _logger.LogInformation(
+            "Email sender configured with SMTP {SmtpHost}:{SmtpPort}, SSL {EnableSsl}, auth {AuthMode}, from {FromAddress}.",
+            _options.Host,
+            _options.Port,
+            _options.EnableSsl,
+            string.IsNullOrWhiteSpace(_options.UserName) ? "disabled" : "enabled",
+            _options.FromAddress);
+
+        if (IsLocalTestSmtp(_options.Host))
+        {
+            _logger.LogWarning(
+                "SMTP host {SmtpHost}:{SmtpPort} is a local/test mailbox. Messages are captured there and will not arrive in external inboxes like Gmail unless real SMTP settings are configured.",
+                _options.Host,
+                _options.Port);
+        }
     }
 
     public async Task SendContactNotificationAsync(
@@ -101,14 +117,46 @@ public class SmtpEmailSender
             client.Credentials = new NetworkCredential(_options.UserName, _options.Password);
         }
 
-        await client.SendMailAsync(message, cancellationToken);
+        _logger.LogInformation(
+            "Sending {RecipientKind} {EventType} email for contact {ContactId} to {Email} using SMTP {SmtpHost}:{SmtpPort}.",
+            recipientKind,
+            contactEvent.EventType,
+            contactEvent.Id,
+            toEmail,
+            _options.Host,
+            _options.Port);
+
+        try
+        {
+            await client.SendMailAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Failed to send {RecipientKind} {EventType} email for contact {ContactId} to {Email} using SMTP {SmtpHost}:{SmtpPort}.",
+                recipientKind,
+                contactEvent.EventType,
+                contactEvent.Id,
+                toEmail,
+                _options.Host,
+                _options.Port);
+            throw;
+        }
 
         _logger.LogInformation(
-            "Sent {RecipientKind} {EventType} email notification to {Email} for contact {ContactId}.",
+            "SMTP accepted {RecipientKind} {EventType} email notification to {Email} for contact {ContactId}.",
             recipientKind,
             contactEvent.EventType,
             toEmail,
             contactEvent.Id);
+    }
+
+    private static bool IsLocalTestSmtp(string host)
+    {
+        return string.Equals(host, "mailpit", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildActorSubject(ContactChangedEvent contactEvent)

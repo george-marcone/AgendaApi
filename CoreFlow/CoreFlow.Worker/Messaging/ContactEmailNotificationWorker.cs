@@ -140,8 +140,21 @@ public class ContactEmailNotificationWorker : BackgroundService
             var contactEvent = JsonSerializer.Deserialize<ContactChangedEvent>(json, JsonOptions)
                 ?? throw new InvalidOperationException("Contact event message is empty.");
 
+            _logger.LogInformation(
+                "Received RabbitMQ contact notification message {DeliveryTag}: {EventType} contact {ContactId}, actor {ActorEmail}, contact {ContactEmail}.",
+                eventArgs.DeliveryTag,
+                contactEvent.EventType,
+                contactEvent.Id,
+                contactEvent.Actor.Email,
+                contactEvent.Email);
+
             await _emailSender.SendContactNotificationAsync(contactEvent, cancellationToken);
             channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+
+            _logger.LogInformation(
+                "Acknowledged RabbitMQ contact notification message {DeliveryTag} for contact {ContactId}.",
+                eventArgs.DeliveryTag,
+                contactEvent.Id);
         }
         catch (Exception exception)
         {
@@ -151,6 +164,10 @@ public class ContactEmailNotificationWorker : BackgroundService
                 eventArgs.DeliveryTag);
 
             channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
+
+            _logger.LogWarning(
+                "Rejected RabbitMQ contact notification message {DeliveryTag} without requeue.",
+                eventArgs.DeliveryTag);
         }
     }
 
