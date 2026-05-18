@@ -21,6 +21,7 @@ using Serilog;
 using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+const string CorsPolicyName = "ConfiguredFrontendOrigins";
 
 var logDirectory = Path.Combine(builder.Environment.ContentRootPath, "logs");
 Directory.CreateDirectory(logDirectory);
@@ -45,6 +46,28 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()?
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin.Trim().TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray() ?? Array.Empty<string>();
+
+if (allowedOrigins.Length > 0)
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(CorsPolicyName, policy =>
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+    });
+}
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -106,7 +129,10 @@ builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(Rab
 builder.Services.AddSingleton<IContactEventPublisher, RabbitMqContactEventPublisher>();
 
 var connectionString = builder.Configuration.GetConnectionString("Default");
-if (!string.IsNullOrWhiteSpace(connectionString))
+var storageProvider = builder.Configuration["Storage:Provider"];
+var useInMemoryStore = string.Equals(storageProvider, "InMemory", StringComparison.OrdinalIgnoreCase);
+
+if (!useInMemoryStore && !string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
     builder.Services.AddScoped<IUserService, EfUserService>();
@@ -114,8 +140,9 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 }
 else
 {
-    builder.Services.AddSingleton<IUserService, InMemoryUserService>();
-    builder.Services.AddSingleton<IAuthService, InMemoryAuthService>();
+    builder.Services.AddSingleton<InMemoryCoreFlowStore>();
+    builder.Services.AddSingleton<IUserService>(provider => provider.GetRequiredService<InMemoryCoreFlowStore>());
+    builder.Services.AddSingleton<IAuthService>(provider => provider.GetRequiredService<InMemoryCoreFlowStore>());
 }
 
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(CreateUserCommand).Assembly));
@@ -169,8 +196,20 @@ app.Use(async (context, next) =>
 });
 
 app.UseHttpsRedirection();
+if (allowedOrigins.Length > 0)
+{
+    app.UseCors(CorsPolicyName);
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/", () => Results.Ok(new
+{
+    name = "CoreFlow API",
+    status = "ok",
+    docs = "/swagger"
+}));
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapControllers();
 
 app.Run();
