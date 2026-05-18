@@ -22,7 +22,7 @@ A aplicação usa SQL Server como banco de dados principal em desenvolvimento/Do
 | OpenAPI JSON publicado | `https://agendaapi-8g3b.onrender.com/swagger/v1/swagger.json` | Documento OpenAPI da API publicada. |
 | Frontend publicado | `https://agendafront.onrender.com` | SPA publicada como Static Site no Render. |
 | Login do frontend | `https://agendafront.onrender.com/login` | Tela de autenticação da aplicação publicada. |
-| Plataforma de e-mail de teste | `http://localhost:8025` | Endereço atual do Mailpit local. Para acesso público, publicar uma instância própria e configurar `VITE_MAILPIT_URL` no frontend. |
+| Plataforma de e-mail de teste local | `http://localhost:8025` | Endereço do Mailpit local. O front mostra esse link nos toasts apenas em `localhost`, Docker local ou IPs privados; em produção pública, como Render, o link fica oculto. |
 
 ## 2. Tipo de arquitetura utilizada
 
@@ -332,7 +332,7 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | Interface web pública | Não publicada atualmente |
 | Função | Receber e exibir os e-mails enviados pelo Worker em desenvolvimento. |
 
-No frontend publicado, o toast mostra o link definido por `VITE_MAILPIT_URL`. O valor atual aponta para `http://localhost:8025`, adequado para teste local com Mailpit rodando na máquina do avaliador. Para acesso público por outras pessoas, publique uma instância do Mailpit e substitua `VITE_MAILPIT_URL` pela URL pública.
+No frontend, o toast de sucesso pode mostrar o link definido por `VITE_MAILPIT_URL`. O valor atual aponta para `http://localhost:8025`, adequado para teste local com Mailpit rodando na máquina do avaliador. Esse link aparece apenas em ambiente local ou Docker local (`localhost`, `127.0.0.1` ou IPs privados). Em produção pública, como Render, o toast mantém a confirmação positiva do evento e oculta o link do Mailpit.
 
 ### Como testar o fluxo de e-mail
 
