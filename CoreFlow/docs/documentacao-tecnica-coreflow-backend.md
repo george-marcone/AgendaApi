@@ -2,13 +2,27 @@
 
 Gerado em: 16/05/2026
 
+Atualizado em: 18/05/2026
+
 ## 1. Visão geral
 
 O CoreFlow é o backend da Agenda de Contatos. Ele foi desenvolvido em ASP.NET Core com .NET 10 e expõe uma API HTTP para autenticação JWT e CRUD de contatos.
 
 No código do backend, o contato da agenda é representado pela entidade `User`. Por isso, os endpoints aparecem como `/api/User`, mas no contexto funcional da aplicação eles atendem ao cadastro, consulta, edição, exclusão e listagem dos contatos da agenda.
 
-A aplicação usa SQL Server como banco de dados principal, Entity Framework Core como ORM, MediatR para CQRS, FluentValidation para regras de validação, RabbitMQ para eventos assíncronos, um Worker .NET para envio de e-mails, Swagger/OpenAPI para documentação dos endpoints, Serilog para logs, Docker para empacotamento e xUnit para testes automatizados.
+A aplicação usa SQL Server como banco de dados principal em desenvolvimento/Docker, Entity Framework Core como ORM, MediatR para CQRS, FluentValidation para regras de validação, RabbitMQ para eventos assíncronos, um Worker .NET para envio de e-mails, Swagger/OpenAPI para documentação dos endpoints, Serilog para logs, Docker para empacotamento e xUnit para testes automatizados. No deploy de demonstração em produção no Render, a API pode usar armazenamento em memória via `Storage:Provider=InMemory`, com usuário admin seedado, para não depender de SQL Server externo.
+
+### 1.1 Endereços publicados
+
+| Recurso | URL | Observação |
+| --- | --- | --- |
+| API backend publicada | `https://agendaapi-8g3b.onrender.com` | Base pública do CoreFlow API no Render. |
+| Healthcheck da API | `https://agendaapi-8g3b.onrender.com/health` | Endpoint simples para verificar disponibilidade. |
+| Swagger UI publicado | `https://agendaapi-8g3b.onrender.com/swagger` | Interface Swagger disponível em produção. |
+| OpenAPI JSON publicado | `https://agendaapi-8g3b.onrender.com/swagger/v1/swagger.json` | Documento OpenAPI da API publicada. |
+| Frontend publicado | `https://agendafront.onrender.com` | SPA publicada como Static Site no Render. |
+| Login do frontend | `https://agendafront.onrender.com/login` | Tela de autenticação da aplicação publicada. |
+| Plataforma de e-mail de teste | Não publicada atualmente | Em Docker local, Mailpit fica em `http://localhost:8025`. Para produção, publicar uma instância própria e configurar `VITE_MAILPIT_URL` no frontend. |
 
 ## 2. Tipo de arquitetura utilizada
 
@@ -253,6 +267,8 @@ URLs de documentação:
 
 | Contexto | URL |
 | --- | --- |
+| Swagger UI publicado no Render | `https://agendaapi-8g3b.onrender.com/swagger` |
+| OpenAPI JSON publicado no Render | `https://agendaapi-8g3b.onrender.com/swagger/v1/swagger.json` |
 | Swagger UI com API em Docker | `http://localhost:5088/swagger` |
 | OpenAPI JSON com API em Docker | `http://localhost:5088/swagger/v1/swagger.json` |
 | Swagger UI com `dotnet run` HTTP | `http://localhost:5062/swagger` |
@@ -274,6 +290,9 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | Nome do container | `coreflow_api` |
 | Porta interna do container | `8080` |
 | Porta publicada no host | `5088` |
+| URL pública no Render | `https://agendaapi-8g3b.onrender.com` |
+| Healthcheck público | `https://agendaapi-8g3b.onrender.com/health` |
+| Swagger público | `https://agendaapi-8g3b.onrender.com/swagger` |
 | URL da API no host | `http://localhost:5088` |
 | URL da API dentro da rede Docker Compose | `http://api:8080` |
 | URL alternativa pelo nome do container | `http://coreflow_api:8080` |
@@ -310,7 +329,10 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | Nome do container | `coreflow_mailpit` |
 | SMTP | `localhost:1025` |
 | Interface web | `http://localhost:8025` |
+| Interface web pública | Não publicada atualmente |
 | Função | Receber e exibir os e-mails enviados pelo Worker em desenvolvimento. |
+
+No frontend publicado, o link para Mailpit só deve aparecer quando `VITE_MAILPIT_URL` estiver configurado com uma URL pública. Se a variável estiver vazia, o link fica oculto para evitar direcionar usuários para `localhost:8025`.
 
 ### Como testar o fluxo de e-mail
 
@@ -937,6 +959,6 @@ Cobertura atual:
 
 O CoreFlow Backend é uma API ASP.NET Core em .NET 10, organizada em camadas e com CQRS via MediatR. A camada API recebe HTTP e documenta endpoints com Swagger/OpenAPI. A camada Application concentra commands, queries, handlers, validações e eventos. A camada Domain contém a entidade `User`, que no produto representa o contato da agenda. A camada Infrastructure implementa persistência com EF Core, SQL Server, segurança de senha com PBKDF2 e publicação de eventos no RabbitMQ. O `CoreFlow.Worker` consome esses eventos e envia e-mails por SMTP para o usuário logado e para o contato afetado.
 
-A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível principalmente em `http://localhost:5088/swagger` quando a API roda em Docker. O banco é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do Worker é `coreflow_worker`, o container do RabbitMQ é `coreflow_rabbitmq`, o container do Mailpit é `coreflow_mailpit`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`.
+A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível em produção em `https://agendaapi-8g3b.onrender.com/swagger` e, quando a API roda em Docker local, em `http://localhost:5088/swagger`. O banco local é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do Worker é `coreflow_worker`, o container do RabbitMQ é `coreflow_rabbitmq`, o container do Mailpit é `coreflow_mailpit`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`. O frontend publicado fica em `https://agendafront.onrender.com`.
 
 A principal regra de negócio do cadastro de contatos é: somente usuário autenticado pode cadastrar; nome, e-mail, telefone e senha são obrigatórios; e-mail e telefone devem ser únicos; telefone precisa estar no formato `+` com 13 dígitos; senha precisa ter pelo menos 8 caracteres; a senha é salva apenas como hash; o contato é gravado em `CoreFlowDb.dbo.Users` com `Id`, `CreatedAt` e `UpdatedAt` gerados automaticamente; contatos editados têm `UpdatedAt` renovado e voltam ao topo da listagem; e um evento é publicado no RabbitMQ para que o Worker envie e-mail ao contato.
