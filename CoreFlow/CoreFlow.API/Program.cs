@@ -203,13 +203,15 @@ if (allowedOrigins.Length > 0)
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapGet("/", () => Results.Ok(new
+var renderProbeHttpMethods = new[] { HttpMethods.Get, HttpMethods.Head };
+
+app.MapMethods("/", renderProbeHttpMethods, () => Results.Ok(new
 {
     name = "CoreFlow API",
     status = "ok",
     docs = "/swagger"
 }));
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapMethods("/health", renderProbeHttpMethods, () => Results.Ok(new { status = "ok" }));
 app.MapControllers();
 
 app.Run();
