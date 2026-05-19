@@ -2,6 +2,15 @@
 
 Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, FluentValidation, EF Core, SQL Server, RabbitMQ e Worker de notificacoes por e-mail em Docker.
 
+Ambiente publicado atual:
+
+- Backend API: `https://agendaapi-8g3b.onrender.com`
+- Swagger: `https://agendaapi-8g3b.onrender.com/swagger`
+- Healthcheck: `https://agendaapi-8g3b.onrender.com/health`
+- Frontend: `https://agenda-front-wheat.vercel.app`
+
+No Render, a API roda como Web Service Docker, escutando internamente em `0.0.0.0:10000`. A API tambem responde aos probes `HEAD /` e `HEAD /health`, usados pelo Render para validar a porta do servico.
+
 ## Estrutura do Projeto
 
 - `CoreFlow.API`: Web API ASP.NET Core, controllers e configuracao de DI.
@@ -11,7 +20,7 @@ Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, Fluent
 - `CoreFlow.Worker`: worker em background que consome eventos do RabbitMQ e envia e-mails.
 - `CoreFlow.Tests`: testes automatizados com xUnit.
 - `docker/sql/init.sql`: script para criar o banco, tabela e seed inicial.
-- `Dockerfile`: build da imagem do backend.
+- `Dockerfile`: build da imagem da API, configurada para Render na porta interna `10000`.
 - `docker-compose.yml`: orquestra backend, Worker, RabbitMQ, Mailpit, SQL Server e inicializacao do banco.
 
 ## Requisitos
@@ -65,6 +74,8 @@ CoreFlow.Worker
 
 Em desenvolvimento, o `docker-compose.yml` sobe o Mailpit como servidor SMTP de teste. Ele recebe os e-mails enviados pelo Worker e exibe tudo em uma interface web. Nessa configuracao padrao, os e-mails nao chegam em Gmail/Outlook real; eles aparecem em `http://localhost:8025`.
 
+Em producao no Render Free, o Worker nao esta publicado porque Background Worker exige metodo de pagamento. Por isso, a API publicada usa `RabbitMq__Enabled=false` por padrao e nao envia e-mails assincromos em producao. O fluxo completo de e-mail continua disponivel localmente via Docker.
+
 URLs locais:
 
 ```text
@@ -72,6 +83,15 @@ RabbitMQ AMQP: amqp://localhost:5672
 RabbitMQ Management: http://localhost:15672
 Mailpit UI: http://localhost:8025
 Mailpit SMTP: localhost:1025
+```
+
+URLs publicadas:
+
+```text
+API Render: https://agendaapi-8g3b.onrender.com
+Swagger Render: https://agendaapi-8g3b.onrender.com/swagger
+Healthcheck Render: https://agendaapi-8g3b.onrender.com/health
+Frontend Vercel: https://agenda-front-wheat.vercel.app
 ```
 
 Credenciais RabbitMQ:
@@ -386,6 +406,66 @@ docker logs coreflow_sql
 docker compose down
 ```
 
+## Deploy atual
+
+### Render API
+
+O backend esta publicado no Render como **Web Service Docker**.
+
+Configuracao usada no Render:
+
+```text
+Repository: george-marcone/AgendaApi
+Branch: main
+Root Directory: CoreFlow
+Dockerfile Path: Dockerfile
+Health Check Path: /health
+```
+
+Variaveis importantes:
+
+```text
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://0.0.0.0:10000
+ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+PORT=10000
+```
+
+O Dockerfile da API ja define `PORT=10000`, `ASPNETCORE_URLS=http://0.0.0.0:10000` e `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`. O endpoint `/` e o endpoint `/health` aceitam `GET` e `HEAD`, para que o Render consiga validar a porta durante o deploy.
+
+Em `Production`, o arquivo `CoreFlow.API/appsettings.Production.json` usa:
+
+```text
+Storage__Provider=InMemory
+RabbitMq__Enabled=false
+```
+
+Isso permite publicar a API sem SQL Server externo e sem Worker de email em background.
+
+### Frontend Vercel
+
+O frontend publicado fica no Vercel:
+
+```text
+https://agenda-front-wheat.vercel.app
+```
+
+Esse dominio esta liberado no CORS da API em `CoreFlow.API/appsettings.Production.json`.
+
+### Worker no Render
+
+O `CoreFlow.Worker` deve ser publicado como **Background Worker**, nao como Web Service, porque ele nao abre porta HTTP. No plano gratuito atual do Render, a criacao de Background Worker solicita cartao de credito. Por isso, o Worker nao esta ativo em producao.
+
+Para ativar o Worker no futuro, serao necessarios:
+
+```text
+1. Render Background Worker
+2. RabbitMQ em nuvem, por exemplo CloudAMQP
+3. SMTP em nuvem, por exemplo Mailtrap
+4. RabbitMq__Enabled=true na API
+5. As mesmas variaveis RabbitMq__* na API e no Worker
+```
+
 ## Execucao Local
 
 Para rodar a API fora do Docker:
@@ -419,6 +499,12 @@ Base URL local:
 
 ```text
 http://localhost:5088
+```
+
+Base URL publicada:
+
+```text
+https://agendaapi-8g3b.onrender.com
 ```
 
 Rotas de autenticacao:
@@ -545,7 +631,7 @@ Eventos:
 - `IContactEventPublisher`
 - `RabbitMqContactEventPublisher`
 
-O `CreateUserHandler` publica evento de contato criado, o `UpdateUserHandler` publica evento de contato atualizado e o `DeleteUserHandler` publica evento de contato removido. O `CoreFlow.Worker` consome esses eventos e envia e-mail para o usuario logado e para o contato afetado.
+O `CreateUserHandler` publica evento de contato criado, o `UpdateUserHandler` publica evento de contato atualizado e o `DeleteUserHandler` publica evento de contato removido quando `RabbitMq__Enabled=true`. No Docker local, o `CoreFlow.Worker` consome esses eventos e envia e-mail para o usuario logado e para o contato afetado. Na API publicada no Render, os eventos estao desativados enquanto nao houver Background Worker em producao.
 
 O `Program.cs` registra MediatR, FluentValidation, pipeline behavior, controllers e infraestrutura. Ele e necessario como composition root da API, mas a regra de CQRS fica na camada `CoreFlow.Application`.
 

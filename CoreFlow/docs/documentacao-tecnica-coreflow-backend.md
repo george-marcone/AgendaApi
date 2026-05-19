@@ -2,7 +2,7 @@
 
 Gerado em: 16/05/2026
 
-Atualizado em: 18/05/2026
+Atualizado em: 19/05/2026
 
 ## 1. Visão geral
 
@@ -12,6 +12,8 @@ No código do backend, o contato da agenda é representado pela entidade `User`.
 
 A aplicação usa SQL Server como banco de dados principal em desenvolvimento/Docker, Entity Framework Core como ORM, MediatR para CQRS, FluentValidation para regras de validação, RabbitMQ para eventos assíncronos, um Worker .NET para envio de e-mails, Swagger/OpenAPI para documentação dos endpoints, Serilog para logs, Docker para empacotamento e xUnit para testes automatizados. No deploy de demonstração em produção no Render, a API pode usar armazenamento em memória via `Storage:Provider=InMemory`, com usuário admin seedado, para não depender de SQL Server externo.
 
+Estado atual de produção: a API está publicada no Render como Web Service Docker em `https://agendaapi-8g3b.onrender.com`, escutando internamente em `0.0.0.0:10000`. O frontend publicado está no Vercel em `https://agenda-front-wheat.vercel.app`. O Worker de e-mail continua disponível localmente via Docker Compose, mas não está publicado no Render porque Background Worker exige método de pagamento no plano atual. Por isso, em produção a API usa `RabbitMq:Enabled=false` enquanto não houver Worker ativo.
+
 ### 1.1 Endereços publicados
 
 | Recurso | URL | Observação |
@@ -20,8 +22,8 @@ A aplicação usa SQL Server como banco de dados principal em desenvolvimento/Do
 | Healthcheck da API | `https://agendaapi-8g3b.onrender.com/health` | Endpoint simples para verificar disponibilidade. |
 | Swagger UI publicado | `https://agendaapi-8g3b.onrender.com/swagger` | Interface Swagger disponível em produção. |
 | OpenAPI JSON publicado | `https://agendaapi-8g3b.onrender.com/swagger/v1/swagger.json` | Documento OpenAPI da API publicada. |
-| Frontend publicado | `https://agendafront.onrender.com` | SPA publicada como Static Site no Render. |
-| Login do frontend | `https://agendafront.onrender.com/login` | Tela de autenticação da aplicação publicada. |
+| Frontend publicado | `https://agenda-front-wheat.vercel.app` | SPA publicada no Vercel. |
+| Login do frontend | `https://agenda-front-wheat.vercel.app/login` | Tela de autenticação da aplicação publicada. |
 | Plataforma de e-mail de teste local | `http://localhost:8025` | Endereço do Mailpit local. O front mostra esse link nos toasts apenas em `localhost`, Docker local ou IPs privados; em produção pública, como Render, o link fica oculto. |
 
 ## 2. Tipo de arquitetura utilizada
@@ -50,9 +52,10 @@ Fluxo arquitetural resumido:
 5. O handler executa o caso de uso.
 6. O handler usa interfaces da aplicação, como `IUserService` ou `IPasswordHasher`.
 7. A infraestrutura implementa essas interfaces com EF Core, SQL Server e PBKDF2.
-8. Após criar, editar ou remover contato, o handler publica um evento de contato no RabbitMQ.
-9. O Worker consome o evento e envia e-mails ao usuário logado e ao contato afetado por SMTP.
-10. O resultado volta para o controller e é convertido em resposta HTTP.
+8. Após criar, editar ou remover contato, o handler publica um evento de contato no RabbitMQ quando `RabbitMq:Enabled=true`.
+9. No Docker local, o Worker consome o evento e envia e-mails ao usuário logado e ao contato afetado por SMTP/Mailpit.
+10. No Render atual, a publicação RabbitMQ fica desativada enquanto não houver Background Worker em produção.
+11. O resultado volta para o controller e é convertido em resposta HTTP.
 
 ## 3. Diagrama da arquitetura
 
@@ -200,13 +203,13 @@ Docker empacota a API e o Worker. Docker Compose orquestra API, Worker, RabbitMQ
 
 | Arquivo | Função |
 | --- | --- |
-| `Dockerfile` | Build multi-stage: SDK .NET 10 para publicar e runtime ASP.NET 10 para executar. |
+| `Dockerfile` | Build multi-stage da API: SDK .NET 10 para publicar e runtime ASP.NET 10 para executar. Em produção Docker/Render, define `PORT=10000`, `ASPNETCORE_URLS=http://0.0.0.0:10000` e `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`. |
 | `docker-compose.yml` | Sobe `api`, `worker`, `rabbitmq`, `mailpit`, `db` e `db-init`. |
 | `docker/sql/init.sql` | Cria banco, tabela, índices e registros iniciais. |
 
 ### RabbitMQ
 
-RabbitMQ é usado como broker de mensagens para desacoplar o CRUD de contatos do envio de e-mails. A API não envia o e-mail diretamente durante a requisição; ela salva a alteração no SQL Server e publica um evento no RabbitMQ.
+RabbitMQ é usado no ambiente local/Docker como broker de mensagens para desacoplar o CRUD de contatos do envio de e-mails. A API não envia o e-mail diretamente durante a requisição; ela salva a alteração no SQL Server e publica um evento no RabbitMQ quando `RabbitMq:Enabled=true`.
 
 Cada evento leva os dados do contato afetado e os dados do usuário logado que executou a ação. O Worker usa essas informações para enviar duas mensagens:
 
@@ -236,6 +239,8 @@ Eventos emitidos:
 ### Worker de e-mail e SMTP
 
 O `CoreFlow.Worker` é uma aplicação em background. Ele consome a fila do RabbitMQ e envia e-mails para o usuário logado e para o contato afetado pelo evento.
+
+No ambiente publicado atual, o Worker não está ativo no Render. Ele deve ser criado como **Background Worker**, não como Web Service, porque não expõe porta HTTP. O Render solicitou cartão de crédito para esse tipo de serviço, então o envio assíncrono por Worker fica restrito ao ambiente local/Docker até que exista um serviço de background em produção.
 
 | Uso | Onde está |
 | --- | --- |
@@ -278,6 +283,13 @@ URLs de documentação:
 | Swagger dentro da rede Docker Compose | `http://api:8080/swagger` |
 | OpenAPI JSON dentro da rede Docker Compose | `http://api:8080/swagger/v1/swagger.json` |
 
+Endpoints simples de disponibilidade:
+
+| Método | Rota | Função |
+| --- | --- | --- |
+| `GET`/`HEAD` | `/` | Retorna identificação da API e caminho do Swagger. O `HEAD` atende ao probe de porta do Render. |
+| `GET`/`HEAD` | `/health` | Retorna `{ "status": "ok" }` e é usado como Health Check Path no Render. |
+
 Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve como arquivo auxiliar para testar chamadas HTTP no editor, mas a documentação formal da API é Swagger/OpenAPI.
 
 ## 6. URLs, containers, banco e tabela
@@ -288,16 +300,39 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | --- | --- |
 | Serviço no `docker-compose.yml` | `api` |
 | Nome do container | `coreflow_api` |
-| Porta interna do container | `8080` |
-| Porta publicada no host | `5088` |
+| Porta interna no Docker Compose | `8080` |
+| Porta publicada no host pelo Docker Compose | `5088` |
+| Porta interna no Render | `10000` |
 | URL pública no Render | `https://agendaapi-8g3b.onrender.com` |
 | Healthcheck público | `https://agendaapi-8g3b.onrender.com/health` |
 | Swagger público | `https://agendaapi-8g3b.onrender.com/swagger` |
+| Probe aceito pelo Render | `HEAD /` e `HEAD /health` retornam `200 OK`. |
 | URL da API no host | `http://localhost:5088` |
 | URL da API dentro da rede Docker Compose | `http://api:8080` |
 | URL alternativa pelo nome do container | `http://coreflow_api:8080` |
 | URL local via `dotnet run` HTTP | `http://localhost:5062` |
 | URL local via `dotnet run` HTTPS | `https://localhost:7200` |
+
+Configuração usada no Render:
+
+| Campo | Valor |
+| --- | --- |
+| Tipo de serviço | Web Service |
+| Runtime | Docker |
+| Branch | `main` |
+| Root Directory | `CoreFlow` |
+| Dockerfile Path | `Dockerfile` |
+| Health Check Path | `/health` |
+| Frontend liberado no CORS | `https://agenda-front-wheat.vercel.app` |
+
+Variáveis relevantes:
+
+```text
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://0.0.0.0:10000
+ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+PORT=10000
+```
 
 ### Worker de e-mail
 
@@ -332,7 +367,7 @@ Além do Swagger, existe o arquivo `CoreFlow.API/CoreFlow.API.http`, que serve c
 | Interface web pública | Não publicada atualmente |
 | Função | Receber e exibir os e-mails enviados pelo Worker em desenvolvimento. |
 
-No frontend, o toast de sucesso pode mostrar o link definido por `VITE_MAILPIT_URL`. O valor atual aponta para `http://localhost:8025`, adequado para teste local com Mailpit rodando na máquina do avaliador. Esse link aparece apenas em ambiente local ou Docker local (`localhost`, `127.0.0.1` ou IPs privados). Em produção pública, como Render, o toast mantém a confirmação positiva do evento e oculta o link do Mailpit.
+No frontend, o toast de sucesso pode mostrar o link definido por `VITE_MAILPIT_URL`. O valor atual aponta para `http://localhost:8025`, adequado para teste local com Mailpit rodando na máquina do avaliador. Esse link aparece apenas em ambiente local ou Docker local (`localhost`, `127.0.0.1` ou IPs privados). Em produção pública, como Vercel/Render, o toast mantém a confirmação positiva do evento e oculta o link do Mailpit.
 
 ### Como testar o fluxo de e-mail
 
@@ -381,6 +416,8 @@ O ambiente de desenvolvimento usa Mailpit para não depender de um provedor exte
 | `Email__FromName` | Nome exibido do remetente. |
 
 Com SMTP real, o RabbitMQ continua igual. A única troca é o destino do `SmtpEmailSender`: em vez de entregar no Mailpit, ele entrega no servidor SMTP configurado.
+
+No Render atual, essa configuração não está ativa porque o Worker exigiria um serviço **Background Worker** separado. Se o Worker for publicado futuramente, ele deve receber as variáveis `RabbitMq__*` e `Email__*`, enquanto a API deve receber as mesmas variáveis `RabbitMq__*` com `RabbitMq__Enabled=true`.
 
 Exemplo para Gmail SMTP:
 
@@ -554,8 +591,8 @@ Rotas da agenda/usuários:
 11. `EfUserService.AddAsync` adiciona o registro ao `DbSet<User>` e executa `SaveChangesAsync`.
 12. O SQL Server grava o contato em `CoreFlowDb.dbo.Users`.
 13. O handler publica `ContactChangedEvent` com tipo `Created`.
-14. `RabbitMqContactEventPublisher` envia o evento para o RabbitMQ.
-15. O Worker consome o evento e envia e-mail para o usuário logado e para o contato cadastrado.
+14. Se `RabbitMq:Enabled=true`, `RabbitMqContactEventPublisher` envia o evento para o RabbitMQ.
+15. No ambiente local/Docker, o Worker consome o evento e envia e-mail para o usuário logado e para o contato cadastrado.
 16. O handler retorna o `Guid` do novo contato.
 17. `UserController.Create` retorna `201 Created` com referência para `GetById`.
 
@@ -602,7 +639,7 @@ Rotas da agenda/usuários:
 2. `RabbitMqContactEventPublisher` declara exchange, fila e binding se necessário.
 3. O evento é publicado no exchange `coreflow.contacts` com routing key `contact.changed`.
 4. A fila `coreflow.contact.email-notifications` recebe a mensagem.
-5. `ContactEmailNotificationWorker` consome a mensagem.
+5. `ContactEmailNotificationWorker` consome a mensagem no ambiente local/Docker.
 6. `SmtpEmailSender` monta assunto e corpo conforme o tipo do evento e o destinatário.
 7. São enviados dois e-mails via SMTP: um para o usuário logado e outro para o contato afetado.
 8. Em desenvolvimento, o Mailpit recebe a mensagem e exibe em `http://localhost:8025`.
@@ -643,7 +680,7 @@ flowchart LR
     end
 
     subgraph Worker[CoreFlow.Worker]
-        EmailWorker[ContactEmailNotificationWorker]
+        EmailWorker[ContactEmailNotificationWorker<br/>local/Docker]
         SmtpSender[SmtpEmailSender]
     end
 
@@ -841,8 +878,8 @@ Quando a validação passa:
 4. A senha recebida é transformada em hash PBKDF2-SHA256.
 5. `EfUserService.AddAsync` salva o usuário/contato no SQL Server.
 6. O registro é persistido em `CoreFlowDb.dbo.Users`.
-7. `CreateUserHandler` publica um evento `Created` no RabbitMQ.
-8. O Worker consome o evento e envia um e-mail para o usuário logado e outro para o contato cadastrado.
+7. Se `RabbitMq:Enabled=true`, `CreateUserHandler` publica um evento `Created` no RabbitMQ.
+8. No ambiente local/Docker, o Worker consome o evento e envia um e-mail para o usuário logado e outro para o contato cadastrado.
 9. A API retorna `201 Created`.
 
 ### 13.7 Resposta de sucesso
@@ -957,8 +994,8 @@ Cobertura atual:
 
 ## 18. Resumo executivo
 
-O CoreFlow Backend é uma API ASP.NET Core em .NET 10, organizada em camadas e com CQRS via MediatR. A camada API recebe HTTP e documenta endpoints com Swagger/OpenAPI. A camada Application concentra commands, queries, handlers, validações e eventos. A camada Domain contém a entidade `User`, que no produto representa o contato da agenda. A camada Infrastructure implementa persistência com EF Core, SQL Server, segurança de senha com PBKDF2 e publicação de eventos no RabbitMQ. O `CoreFlow.Worker` consome esses eventos e envia e-mails por SMTP para o usuário logado e para o contato afetado.
+O CoreFlow Backend é uma API ASP.NET Core em .NET 10, organizada em camadas e com CQRS via MediatR. A camada API recebe HTTP e documenta endpoints com Swagger/OpenAPI. A camada Application concentra commands, queries, handlers, validações e eventos. A camada Domain contém a entidade `User`, que no produto representa o contato da agenda. A camada Infrastructure implementa persistência com EF Core, SQL Server, segurança de senha com PBKDF2 e publicação de eventos no RabbitMQ. No Docker local, o `CoreFlow.Worker` consome esses eventos e envia e-mails por SMTP para o usuário logado e para o contato afetado. No Render atual, a API está publicada sem Worker de background e com RabbitMQ desativado em produção.
 
-A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível em produção em `https://agendaapi-8g3b.onrender.com/swagger` e, quando a API roda em Docker local, em `http://localhost:5088/swagger`. O banco local é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do Worker é `coreflow_worker`, o container do RabbitMQ é `coreflow_rabbitmq`, o container do Mailpit é `coreflow_mailpit`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`. O frontend publicado fica em `https://agendafront.onrender.com`.
+A documentação formal dos endpoints é Swagger/OpenAPI e fica disponível em produção em `https://agendaapi-8g3b.onrender.com/swagger` e, quando a API roda em Docker local, em `http://localhost:5088/swagger`. O banco local é `CoreFlowDb`, a tabela principal é `dbo.Users`, o container da API é `coreflow_api`, o container do Worker é `coreflow_worker`, o container do RabbitMQ é `coreflow_rabbitmq`, o container do Mailpit é `coreflow_mailpit`, o container do banco é `coreflow_sql` e o frontend em container, no projeto `AgendaFront`, é `agenda_front` em `http://localhost:5173`. O frontend publicado fica em `https://agenda-front-wheat.vercel.app`.
 
-A principal regra de negócio do cadastro de contatos é: somente usuário autenticado pode cadastrar; nome, e-mail, telefone e senha são obrigatórios; e-mail e telefone devem ser únicos; telefone precisa estar no formato `+` com 13 dígitos; senha precisa ter pelo menos 8 caracteres; a senha é salva apenas como hash; o contato é gravado em `CoreFlowDb.dbo.Users` com `Id`, `CreatedAt` e `UpdatedAt` gerados automaticamente; contatos editados têm `UpdatedAt` renovado e voltam ao topo da listagem; e um evento é publicado no RabbitMQ para que o Worker envie e-mail ao contato.
+A principal regra de negócio do cadastro de contatos é: somente usuário autenticado pode cadastrar; nome, e-mail, telefone e senha são obrigatórios; e-mail e telefone devem ser únicos; telefone precisa estar no formato `+` com 13 dígitos; senha precisa ter pelo menos 8 caracteres; a senha é salva apenas como hash; o contato é gravado em `CoreFlowDb.dbo.Users` com `Id`, `CreatedAt` e `UpdatedAt` gerados automaticamente; contatos editados têm `UpdatedAt` renovado e voltam ao topo da listagem; e, quando `RabbitMq:Enabled=true`, um evento é publicado no RabbitMQ para que o Worker envie e-mail ao contato.
