@@ -125,8 +125,25 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.Configure<MessagingOptions>(builder.Configuration.GetSection(MessagingOptions.SectionName));
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
-builder.Services.AddSingleton<IContactEventPublisher, RabbitMqContactEventPublisher>();
+builder.Services.Configure<AzureServiceBusOptions>(builder.Configuration.GetSection(AzureServiceBusOptions.SectionName));
+
+var messagingOptions = builder.Configuration.GetSection(MessagingOptions.SectionName).Get<MessagingOptions>()
+    ?? new MessagingOptions();
+
+if (MessagingProviders.Is(messagingOptions.Provider, MessagingProviders.AzureServiceBus))
+{
+    builder.Services.AddSingleton<IContactEventPublisher, AzureServiceBusContactEventPublisher>();
+}
+else if (MessagingProviders.Is(messagingOptions.Provider, MessagingProviders.None))
+{
+    builder.Services.AddSingleton<IContactEventPublisher, DisabledContactEventPublisher>();
+}
+else
+{
+    builder.Services.AddSingleton<IContactEventPublisher, RabbitMqContactEventPublisher>();
+}
 
 var connectionString = builder.Configuration.GetConnectionString("Default");
 var storageProvider = builder.Configuration["Storage:Provider"];

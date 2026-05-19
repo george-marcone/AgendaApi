@@ -1,6 +1,6 @@
 # CoreFlow
 
-Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, FluentValidation, EF Core, SQL Server, RabbitMQ e Worker de notificacoes por e-mail em Docker.
+Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, FluentValidation, EF Core, SQL Server, RabbitMQ/Azure Service Bus e Worker de notificacoes por e-mail em Docker.
 
 ## Estrutura do Projeto
 
@@ -8,7 +8,7 @@ Backend .NET para CRUD de usuarios usando ASP.NET Core, CQRS com MediatR, Fluent
 - `CoreFlow.Application`: commands, queries, handlers, validators, interfaces e behaviors.
 - `CoreFlow.Domain`: entidades de dominio.
 - `CoreFlow.Infrastructure`: EF Core, `AppDbContext`, servicos de persistencia e migrations.
-- `CoreFlow.Worker`: worker em background que consome eventos do RabbitMQ e envia e-mails.
+- `CoreFlow.Worker`: worker em background que consome eventos do RabbitMQ ou Azure Service Bus e envia e-mails.
 - `CoreFlow.Tests`: testes automatizados com xUnit.
 - `docker/sql/init.sql`: script para criar o banco, tabela e seed inicial.
 - `Dockerfile`: build da imagem do backend.
@@ -98,6 +98,26 @@ Routing key:
 ```text
 contact.changed
 ```
+
+## Azure Service Bus
+
+Na branch `feature/azure-service-bus`, o broker de mensagens ficou configuravel por `Messaging__Provider`:
+
+```text
+RabbitMq         # desenvolvimento local com docker-compose
+AzureServiceBus  # publicacao na Azure
+None             # desativa eventos
+```
+
+Para Azure Container Apps, configure API e Worker com:
+
+```text
+Messaging__Provider=AzureServiceBus
+AzureServiceBus__ConnectionString=<connection string>
+AzureServiceBus__QueueName=coreflow-contact-email-notifications
+```
+
+A documentacao completa de publicacao esta em `docs/publicacao-azure-service-bus.md`.
 
 ## Banco de Dados
 

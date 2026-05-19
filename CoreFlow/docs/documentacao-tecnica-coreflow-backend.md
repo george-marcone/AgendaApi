@@ -225,6 +225,30 @@ Cada evento leva os dados do contato afetado e os dados do usuário logado que e
 | Fila | `coreflow.contact.email-notifications` |
 | Routing key | `contact.changed` |
 
+### Azure Service Bus
+
+Na branch `feature/azure-service-bus`, a mensageria foi extraida para o provider configuravel `Messaging:Provider`. O valor `RabbitMq` mantem o comportamento local com Docker Compose. O valor `AzureServiceBus` faz a API publicar o mesmo `ContactChangedEvent` em uma fila do Azure Service Bus e faz o Worker consumir essa fila usando o SDK `Azure.Messaging.ServiceBus`.
+
+Arquivos principais:
+
+| Item | Caminho |
+| --- | --- |
+| Selecao do provider | `CoreFlow.Infrastructure/Messaging/MessagingOptions.cs` |
+| Opcoes Azure Service Bus | `CoreFlow.Infrastructure/Messaging/AzureServiceBusOptions.cs` |
+| Publicador Azure Service Bus | `CoreFlow.Infrastructure/Messaging/AzureServiceBusContactEventPublisher.cs` |
+| Worker Azure Service Bus | `CoreFlow.Worker/Messaging/AzureServiceBusContactEmailNotificationWorker.cs` |
+| Publicador desativado | `CoreFlow.Infrastructure/Messaging/DisabledContactEventPublisher.cs` |
+
+Configuracao minima para producao Azure:
+
+```text
+Messaging__Provider=AzureServiceBus
+AzureServiceBus__ConnectionString=<connection string do namespace>
+AzureServiceBus__QueueName=coreflow-contact-email-notifications
+```
+
+No Azure Container Apps, o Worker deve ser publicado sem ingress publico e com escala baseada em fila do Azure Service Bus. A configuracao recomendada usa `min-replicas 0`, `max-replicas 1` ou mais conforme volume, e regra KEDA `azure-servicebus` com `messageCount=1`. O roteiro completo esta em `docs/publicacao-azure-service-bus.md`.
+
 Eventos emitidos:
 
 | Evento | Quando ocorre |
@@ -239,7 +263,8 @@ O `CoreFlow.Worker` é uma aplicação em background. Ele consome a fila do Rabb
 
 | Uso | Onde está |
 | --- | --- |
-| Worker principal | `CoreFlow.Worker/Messaging/ContactEmailNotificationWorker.cs` |
+| Worker RabbitMQ | `CoreFlow.Worker/Messaging/RabbitMqContactEmailNotificationWorker.cs` |
+| Worker Azure Service Bus | `CoreFlow.Worker/Messaging/AzureServiceBusContactEmailNotificationWorker.cs` |
 | Envio via SMTP | `CoreFlow.Worker/Email/SmtpEmailSender.cs` |
 | Configurações de SMTP | `CoreFlow.Worker/Email/EmailOptions.cs`, `CoreFlow.Worker/appsettings.json` |
 | Dockerfile do Worker | `CoreFlow.Worker/Dockerfile` |
@@ -602,7 +627,7 @@ Rotas da agenda/usuários:
 2. `RabbitMqContactEventPublisher` declara exchange, fila e binding se necessário.
 3. O evento é publicado no exchange `coreflow.contacts` com routing key `contact.changed`.
 4. A fila `coreflow.contact.email-notifications` recebe a mensagem.
-5. `ContactEmailNotificationWorker` consome a mensagem.
+5. O Worker de e-mail consome a mensagem pelo provider configurado.
 6. `SmtpEmailSender` monta assunto e corpo conforme o tipo do evento e o destinatário.
 7. São enviados dois e-mails via SMTP: um para o usuário logado e outro para o contato afetado.
 8. Em desenvolvimento, o Mailpit recebe a mensagem e exibe em `http://localhost:8025`.
@@ -643,7 +668,7 @@ flowchart LR
     end
 
     subgraph Worker[CoreFlow.Worker]
-        EmailWorker[ContactEmailNotificationWorker]
+        EmailWorker[Email Notification Worker]
         SmtpSender[SmtpEmailSender]
     end
 

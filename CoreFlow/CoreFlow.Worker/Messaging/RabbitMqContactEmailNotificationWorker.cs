@@ -11,7 +11,7 @@ using RabbitMQ.Client.Exceptions;
 
 namespace CoreFlow.Worker.Messaging;
 
-public class ContactEmailNotificationWorker : BackgroundService
+public class RabbitMqContactEmailNotificationWorker : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -20,12 +20,12 @@ public class ContactEmailNotificationWorker : BackgroundService
 
     private readonly RabbitMqOptions _options;
     private readonly SmtpEmailSender _emailSender;
-    private readonly ILogger<ContactEmailNotificationWorker> _logger;
+    private readonly ILogger<RabbitMqContactEmailNotificationWorker> _logger;
 
-    public ContactEmailNotificationWorker(
+    public RabbitMqContactEmailNotificationWorker(
         IOptions<RabbitMqOptions> options,
         SmtpEmailSender emailSender,
-        ILogger<ContactEmailNotificationWorker> logger)
+        ILogger<RabbitMqContactEmailNotificationWorker> logger)
     {
         _options = options.Value;
         _emailSender = emailSender;

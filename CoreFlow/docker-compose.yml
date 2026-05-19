@@ -11,6 +11,7 @@ services:
       Jwt__Audience: "CoreFlow.Frontend"
       Jwt__Key: "CoreFlow.Dev.Jwt.Secret.Change.This.Value.2026"
       Jwt__ExpiresMinutes: "60"
+      Messaging__Provider: "RabbitMq"
       RabbitMq__Enabled: "true"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
@@ -35,6 +36,7 @@ services:
       dockerfile: CoreFlow.Worker/Dockerfile
     container_name: coreflow_worker
     environment:
+      Messaging__Provider: "RabbitMq"
       RabbitMq__Enabled: "true"
       RabbitMq__HostName: "rabbitmq"
       RabbitMq__Port: "5672"
